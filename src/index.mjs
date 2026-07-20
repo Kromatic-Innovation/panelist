@@ -14,7 +14,7 @@
 // formatPanelSummary leads with verdict/deal-killers (never a warmth score),
 // and drift-check gains a checkHonesty guardrail so CI can assert no summary
 // omits the caveat. A live PromptFoo/LiteLLM provider remains a later slice.
-export const PANELIST_VERSION = "0.1.0";
+export const PANELIST_VERSION = "0.1.1";
 
 // Registry — compose personas/rubrics at runtime.
 export {

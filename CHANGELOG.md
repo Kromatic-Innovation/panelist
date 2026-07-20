@@ -13,6 +13,19 @@ takes over.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-20
+
+Documentation-only patch release. No API or behavioural changes — this release
+exists to ship the corrected public-facing docs to npm consumers, since README
+content only reaches `npm i panelist` on a new publish (the docs fixes landed
+in the repo after `0.1.0` was published).
+
+- Fixed the README install instructions to match the live public-npm publish
+  (`npm i panelist`), replacing the stale GitHub-Packages-only, token-gated
+  install path that shipped in the `0.1.0` tarball.
+- Added the hero illustration and the use-case / differentiator / "why"
+  framing to the README.
+
 ## [0.1.0] - 2026-07-20
 
 Initial extraction of panelist as a standalone library.
