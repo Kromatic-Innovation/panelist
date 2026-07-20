@@ -1,5 +1,9 @@
 # plenum
 
+[![CI](https://github.com/Kromatic-Innovation/plenum/actions/workflows/ci.yml/badge.svg)](https://github.com/Kromatic-Innovation/plenum/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Kromatic-Innovation/plenum/blob/develop/LICENSE)
+[![npm package](https://img.shields.io/github/package-json/v/Kromatic-Innovation/plenum)](https://github.com/Kromatic-Innovation/plenum/pkgs/npm/plenum)
+
 **A synthetic persona panel that tells you where readers _quit_ — not how much they'd like it.** Cross-model by default to fight self-preference bias, and honest by construction that it's a cheap pre-filter, not user research.
 
 > ⚠️ **What plenum is and is not for.** A synthetic persona is a *model* of a customer, and your model of the customer is wrong — that is why you talk to real people. plenum is legitimate as a **drafting aid**, a **cheap pre-filter** to kill obviously-weak drafts before spending a human's attention, and a way to catch obvious misses. It is **not** evidence about real readers, **not** a substitute for talking to them, and **not** validation. "Our personas responded well to this" is a sentence this tool is designed to make hard to write.
