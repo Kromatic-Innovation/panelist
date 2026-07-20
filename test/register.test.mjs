@@ -6,8 +6,10 @@ import {
   getPersona,
   getPersonas,
   getRubric,
+  getUsage,
   clearRegistry,
 } from "../src/lib/register.mjs";
+import { SCHEMA_VERSION, USAGE_HEADER, PERSONA_SCHEMA, validatePersona } from "../src/lib/schema.mjs";
 import reviewPack from "../packs/review/index.mjs";
 import businessPack from "../packs/business/index.mjs";
 
@@ -76,4 +78,68 @@ test("rubrics compose via source.rubrics and registerRubric", () => {
   registerRubric("other", { axes: ["b"] });
   assert.deepEqual(getRubric("other").axes, ["b"]);
   assert.equal(getRubric("missing"), null);
+});
+
+test("getUsage returns the canonical default when nothing is set", () => {
+  registerPersonas(reviewPack);
+  assert.equal(getUsage(), USAGE_HEADER);
+});
+
+test("a source's usage field overrides the default (last-wins)", () => {
+  registerPersonas({ personas: reviewPack, usage: "custom honesty header for this registry" });
+  assert.equal(getUsage(), "custom honesty header for this registry");
+  registerPersonas({ personas: businessPack, usage: "second custom header" });
+  assert.equal(getUsage(), "second custom header");
+});
+
+test("clearRegistry resets usage back to the canonical default", () => {
+  registerPersonas({ personas: reviewPack, usage: "custom honesty header" });
+  assert.equal(getUsage(), "custom honesty header");
+  clearRegistry();
+  assert.equal(getUsage(), USAGE_HEADER);
+});
+
+test("SCHEMA_VERSION and PERSONA_SCHEMA carry the v2 markers", () => {
+  assert.equal(SCHEMA_VERSION, 2);
+  assert.equal(PERSONA_SCHEMA.version, 2);
+  assert.equal(PERSONA_SCHEMA.usage, USAGE_HEADER);
+});
+
+test("lens is optional/derived: records validate with or without it", () => {
+  const withLens = {
+    id: "with-lens",
+    name: "With Lens",
+    role: "r",
+    caresAbout: ["a"],
+    rewards: ["a"],
+    punishes: ["a"],
+    quitsWhen: ["a"],
+    lens: "a derived synthesis line",
+  };
+  const withoutLens = {
+    id: "without-lens",
+    name: "Without Lens",
+    role: "r",
+    caresAbout: ["a"],
+    rewards: ["a"],
+    punishes: ["a"],
+    quitsWhen: ["a"],
+  };
+  assert.equal(validatePersona(withLens).ok, true);
+  assert.equal(validatePersona(withoutLens).ok, true);
+});
+
+test("a forbidden demographic field (age) is rejected by validatePersona", () => {
+  const { ok, errors } = validatePersona({
+    id: "demo",
+    name: "Demo",
+    role: "r",
+    caresAbout: ["a"],
+    rewards: ["a"],
+    punishes: ["a"],
+    quitsWhen: ["a"],
+    age: 40,
+  });
+  assert.equal(ok, false);
+  assert.ok(errors.some((e) => /forbidden demographic field/.test(e)));
 });

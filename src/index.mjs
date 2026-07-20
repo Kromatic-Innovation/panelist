@@ -7,8 +7,9 @@
 // adapter in production).
 //
 // Ported from the internal persona-review skill (cwc#1320 S1). The v2 schema
-// (plenum#2), a live PromptFoo/LiteLLM provider, full honesty guardrails
-// (plenum#6), and the agentic converse plane (plenum#4) are later slices.
+// (plenum#2) is landed; a live PromptFoo/LiteLLM provider, full honesty
+// guardrails (plenum#6), and the agentic converse plane (plenum#4) are later
+// slices.
 export const PLENUM_VERSION = "0.0.0";
 
 // Registry — compose personas/rubrics at runtime.
@@ -18,6 +19,7 @@ export {
   getPersona,
   getPersonas,
   getRubric,
+  getUsage,
   clearRegistry,
 } from "./lib/register.mjs";
 
@@ -41,6 +43,8 @@ export { spawn, buildSpawnPrompt } from "./lib/spawn.mjs";
 
 // Schema.
 export {
+  SCHEMA_VERSION,
+  USAGE_HEADER,
   PERSONA_SCHEMA,
   PERSONA_FIELDS,
   REQUIRED_FIELDS,

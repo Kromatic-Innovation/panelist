@@ -15,7 +15,7 @@
 // A "source" is one of:
 //   - an array of persona records
 //   - a single persona record
-//   - an object { personas?: [...], rubrics?: { key: rubric } }
+//   - an object { personas?: [...], rubrics?: { key: rubric }, usage?: string }
 //
 // Later sources override earlier ones by id (last-wins), so a consumer can layer
 // a private override on top of a public pack. Unlike the file loader it replaces,
@@ -24,10 +24,11 @@
 //
 // Pure, zero-dep, no filesystem access.
 
-import { validatePersona, isPersonaShaped } from "./schema.mjs";
+import { validatePersona, isPersonaShaped, USAGE_HEADER } from "./schema.mjs";
 
 const _personas = new Map(); // id -> record
 const _rubrics = new Map(); // key -> rubric
+let _usage = USAGE_HEADER; // register-level honesty header; last source wins
 
 /** Normalize a source into a flat list of candidate records + rubric entries. */
 function* iterRecords(source) {
@@ -58,6 +59,10 @@ export function registerPersonas(...sources) {
       for (const [key, rubric] of Object.entries(source.rubrics)) {
         _rubrics.set(key, rubric);
       }
+    }
+    // A source may carry its own usage/honesty header; last-wins, same as rubrics.
+    if (source && !Array.isArray(source) && typeof source === "object" && typeof source.usage === "string") {
+      _usage = source.usage;
     }
     for (const record of iterRecords(source)) {
       const { ok, errors } = validatePersona(record);
@@ -118,8 +123,18 @@ export function getRubric(key) {
   return _rubrics.get(key) || null;
 }
 
+/**
+ * Return the register's composed usage/honesty header — the last source's
+ * `usage` string if one was set, otherwise the canonical USAGE_HEADER default.
+ * @returns {string}
+ */
+export function getUsage() {
+  return _usage;
+}
+
 /** Reset the registry. Primarily for test isolation. */
 export function clearRegistry() {
   _personas.clear();
   _rubrics.clear();
+  _usage = USAGE_HEADER;
 }
