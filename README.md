@@ -71,6 +71,7 @@ const client = {
   },
 };
 
+const readmeText = "# my-project\n\nInstall: npm i my-project\n"; // the draft under review
 const verdict = await spawn(
   "drive-by-installer",
   {
