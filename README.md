@@ -16,6 +16,25 @@ Most tools that spawn personas emit a warmth/viability *score* — the exact out
 
 See [`docs/synthetic-persona-best-practices.md`](docs/synthetic-persona-best-practices.md) for the governing rules behind these design choices (specificity over decoration, demographics vs. behaviour, anti-sycophancy, panel diversity, calibration, and the honesty line).
 
+## Install
+
+plenum is published to GitHub Packages under the `@kromatic-innovation` scope, not the public npm registry. Since the package is private-org-scoped, consumers need a GitHub Packages read token in addition to pointing the scope at the right registry.
+
+Add to your project's `.npmrc`:
+
+```
+@kromatic-innovation:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+`GITHUB_TOKEN` here is a PAT (or CI-provided `GITHUB_TOKEN`) with `read:packages` scope on the Kromatic-Innovation org.
+
+Then install as usual:
+
+```
+npm install @kromatic-innovation/plenum
+```
+
 ## Use cases
 
 - "Give me feedback on this."

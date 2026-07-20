@@ -1,6 +1,6 @@
 {
   "name": "@kromatic-innovation/plenum",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A synthetic persona panel that tells you where readers quit — not how much they'd like it. Cross-model by default, honest by construction that it's a pre-filter, not user research.",
   "license": "Apache-2.0",
   "type": "module",
