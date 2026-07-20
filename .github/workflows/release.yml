@@ -4,6 +4,11 @@ name: Release
 # (https://registry.npmjs.org). This is DISTINCT from publish.yml, which
 # publishes the same package to GitHub Packages for internal/org consumers.
 #
+# package.json's `publishConfig.registry` points at GitHub Packages (for
+# publish.yml's benefit) and takes precedence over setup-node's registry-url
+# for `npm publish` — this job deletes that field in-CI before publishing so
+# the release actually targets npmjs.org, mirroring ideate-core's release.yml.
+#
 # Trigger model:
 #   - `push: tags: ['v*']` — the real release path. A human (or the
 #     Releasing process in CONTRIBUTING.md) tags a commit `vX.Y.Z` and
@@ -56,6 +61,9 @@ jobs:
 
       - name: Run tests (pre-publish gate)
         run: node --test test/*.test.mjs
+
+      - name: Route this publish to public npm (not GitHub Packages)
+        run: npm pkg delete publishConfig.registry
 
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
