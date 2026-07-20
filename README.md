@@ -25,7 +25,7 @@ See [`docs/synthetic-persona-best-practices.md`](docs/synthetic-persona-best-pra
 
 ## Personas: identity is data, task is ephemeral
 
-A persona is a durable **identity** record (what it rewards, punishes, and quits over). The **task** (vote / comment / converse) is supplied by the caller at invocation time — so one definition answers any instruction, with no new consumer script per use case.
+A persona is a durable **identity** record (what it rewards, punishes, and quits over). The **task** (vote / comment / converse) is supplied by the caller at invocation time — so one definition answers any instruction, with no new consumer script per use case. See [`docs/invocation-contract.md`](docs/invocation-contract.md) for the formal task/response envelope.
 
 ```js
 import { spawn } from "@kromatic-innovation/plenum";
