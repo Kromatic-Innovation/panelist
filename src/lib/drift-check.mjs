@@ -8,8 +8,18 @@
 //
 // Pure, injectable, zero-dep ESM. Nothing throws on bad input — an invalid record
 // is reported, not thrown.
+//
+// D7 (resolved, plenum#6): drift-check does NOT retarget to "register-vs-
+// rendered-prompt" — after persona-as-subagent (cwc#1262) and the generic
+// runner (runner.mjs / D5), identity is rendered LIVE from the register at
+// call time, so there is no second static copy to drift against there.
+// Instead this module KEEPS its record-schema validation role and GAINS one
+// new guardrail: checkHonesty, which proves no panel summary/envelope omits
+// the honesty caveat (honesty.mjs). See
+// Kromatic-Innovation/code-workspace-config#1262.
 
 import { validatePersona } from "./schema.mjs";
+import { assertHonestyStamped } from "./honesty.mjs";
 
 // validatePersona is schema-driven (schema.mjs), so this already enforces the
 // v2 shape as a side effect: the behavioural triple (rewards/punishes/quitsWhen)
@@ -47,6 +57,23 @@ export function checkRecords(records) {
     invalid,
     duplicateIds: [...duplicateIds],
   };
+}
+
+/**
+ * Honesty-stamp guardrail (plenum#6 / D7): check a batch of panel summaries
+ * (strings) or envelopes (objects) and report which ones (by index) omit the
+ * honesty caveat. Never throws — delegates to assertHonestyStamped per item.
+ * @param {Array<string|object>} summaries
+ * @returns {{ ok: boolean, offenders: number[] }}
+ */
+export function checkHonesty(summaries) {
+  const list = Array.isArray(summaries) ? summaries : [];
+  const offenders = [];
+  list.forEach((item, i) => {
+    const { ok } = assertHonestyStamped(item);
+    if (!ok) offenders.push(i);
+  });
+  return { ok: offenders.length === 0, offenders };
 }
 
 /** Render a check report as a human-readable string. */
