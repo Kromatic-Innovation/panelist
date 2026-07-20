@@ -14,6 +14,8 @@ Most tools that spawn personas emit a warmth/viability *score* — the exact out
 - **Honesty by construction.** Every panel output auto-stamps the caveat above.
 - **Calibration hooks.** Join synthetic verdicts to real downstream signal and rank personas by how well they *predict*, not how well they *read*.
 
+See [`docs/synthetic-persona-best-practices.md`](docs/synthetic-persona-best-practices.md) for the governing rules behind these design choices (specificity over decoration, demographics vs. behaviour, anti-sycophancy, panel diversity, calibration, and the honesty line).
+
 ## Use cases
 
 - "Give me feedback on this."
