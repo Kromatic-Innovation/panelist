@@ -3,7 +3,7 @@
 ## Supported Versions
 
 panelist is pre-1.0 and evolving quickly. Only the latest `0.x` release
-published to GitHub Packages is supported with security fixes.
+published to public npm is supported with security fixes.
 
 | Version | Supported          |
 | ------- | ------------------ |
