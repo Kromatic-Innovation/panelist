@@ -22,8 +22,17 @@
 //   buildEvalPrompt({...})           default prompt builder (overridable via deps)
 //   normalizeRubric(rubric)          fill rubric defaults
 //   createLimiter(max)               tiny promise-concurrency limiter
+//
+// Every evaluation this module returns (scoreCandidate/score, including the
+// neutralFallback path) is auto-stamped with `honesty: USAGE_HEADER`
+// (plenum#6) — the static default caveat, not the live register header. This
+// module intentionally stays free of register.mjs state; a caller who wants
+// the composed register header instead can re-stamp via honesty.mjs's
+// stampHonesty(evaluation, getUsage()).
 
 // ── Rubric normalization ────────────────────────────────────────────────────
+
+import { USAGE_HEADER } from "./schema.mjs";
 
 const DEFAULT_AXES = ["resonance", "clarity", "credibility", "scrollStop"];
 const DEFAULT_CUT_THRESHOLD = 5.0;
@@ -324,6 +333,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     verdict: decideVerdict(aggregate, norm),
     crossModel: spansMultipleProviders(Object.keys(byModel)),
     panelistsFailed,
+    honesty: USAGE_HEADER,
   };
 }
 
@@ -378,6 +388,7 @@ function neutralFallback(candidate, panelistsFailed, rubric) {
     crossModel: false,
     panelistsFailed,
     fallback: true,
+    honesty: USAGE_HEADER,
   };
 }
 

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { score, scoreCandidate, decideVerdict } from "../src/lib/score.mjs";
+import { HONESTY_MARKER } from "../src/lib/honesty.mjs";
 import { fixedScorer, deadClient } from "./_helpers.mjs";
 import reviewPack from "../packs/review/index.mjs";
 
@@ -46,6 +47,21 @@ test("whole-panel failure returns the marked neutral fallback", async () => {
   assert.equal(res.fallback, true);
   assert.equal(res.crossModel, false);
   assert.match(res.scores.byPersona[0].note, /HUMAN REVIEW/);
+});
+
+test("score() output is auto-stamped with the honesty caveat (plenum#6)", async () => {
+  const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
+  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });
+  assert.equal(typeof res.honesty, "string");
+  assert.ok(res.honesty.length > 0);
+  assert.ok(res.honesty.includes(HONESTY_MARKER));
+});
+
+test("neutralFallback output is also stamped with the honesty caveat", async () => {
+  const panel = [deadClient("claude-x"), deadClient("gpt-y")];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  assert.equal(res.fallback, true);
+  assert.ok(res.honesty.includes(HONESTY_MARKER));
 });
 
 test("decideVerdict cuts on low overall and on kill-axis floor", () => {

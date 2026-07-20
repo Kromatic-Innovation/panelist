@@ -9,8 +9,11 @@
 // Ported from the internal persona-review skill (cwc#1320 S1). The v2 schema
 // (plenum#2) is landed; the agentic entry point (plenum#4: spawn + the generic
 // runner) and the calibration harness (plenum#5: synthetic vs real signal) are
-// now landing too. A live PromptFoo/LiteLLM provider and full honesty
-// guardrails (plenum#6) remain later slices.
+// landed too. Full honesty guardrails (plenum#6) are now landing: every panel
+// output is auto-stamped with the honesty caveat by construction (score.mjs),
+// formatPanelSummary leads with verdict/deal-killers (never a warmth score),
+// and drift-check gains a checkHonesty guardrail so CI can assert no summary
+// omits the caveat. A live PromptFoo/LiteLLM provider remains a later slice.
 export const PLENUM_VERSION = "0.0.0";
 
 // Registry — compose personas/rubrics at runtime.
@@ -62,5 +65,14 @@ export {
   isPersonaShaped,
 } from "./lib/schema.mjs";
 
-// Drift-check (repo-scoped record validation).
-export { checkRecords, scanRepo as driftScanRepo, formatReport as formatDriftReport } from "./lib/drift-check.mjs";
+// Drift-check (repo-scoped record validation + honesty-stamp guardrail).
+export {
+  checkRecords,
+  scanRepo as driftScanRepo,
+  formatReport as formatDriftReport,
+  checkHonesty,
+} from "./lib/drift-check.mjs";
+
+// Honesty guardrails (plenum#6) — auto-stamp + assert the honesty caveat on
+// every panel output; formatPanelSummary leads with verdict/deal-killers.
+export { stampHonesty, formatPanelSummary, assertHonestyStamped, HONESTY_MARKER } from "./lib/honesty.mjs";
