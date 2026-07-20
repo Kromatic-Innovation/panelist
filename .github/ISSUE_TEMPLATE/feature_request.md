@@ -1,12 +1,12 @@
 ---
 name: Feature request
-about: Suggest an addition or change to plenum
+about: Suggest an addition or change to panelist
 labels: enhancement
 ---
 
 ## Problem
 
-What are you trying to do, and where does plenum currently fall short?
+What are you trying to do, and where does panelist currently fall short?
 
 ## Proposed solution
 

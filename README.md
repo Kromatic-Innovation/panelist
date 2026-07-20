@@ -1,16 +1,16 @@
-# plenum
+# panelist
 
-[![CI](https://github.com/Kromatic-Innovation/plenum/actions/workflows/ci.yml/badge.svg)](https://github.com/Kromatic-Innovation/plenum/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Kromatic-Innovation/plenum/blob/develop/LICENSE)
-[![npm package](https://img.shields.io/github/package-json/v/Kromatic-Innovation/plenum)](https://github.com/Kromatic-Innovation/plenum/pkgs/npm/plenum)
+[![CI](https://github.com/Kromatic-Innovation/panelist/actions/workflows/ci.yml/badge.svg)](https://github.com/Kromatic-Innovation/panelist/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Kromatic-Innovation/panelist/blob/develop/LICENSE)
+[![npm package](https://img.shields.io/github/package-json/v/Kromatic-Innovation/panelist)](https://github.com/Kromatic-Innovation/panelist/pkgs/npm/panelist)
 
 **A synthetic persona panel that tells you where readers _quit_ — not how much they'd like it.** Cross-model by default to fight self-preference bias, and honest by construction that it's a cheap pre-filter, not user research.
 
-> ⚠️ **What plenum is and is not for.** A synthetic persona is a *model* of a customer, and your model of the customer is wrong — that is why you talk to real people. plenum is legitimate as a **drafting aid**, a **cheap pre-filter** to kill obviously-weak drafts before spending a human's attention, and a way to catch obvious misses. It is **not** evidence about real readers, **not** a substitute for talking to them, and **not** validation. "Our personas responded well to this" is a sentence this tool is designed to make hard to write.
+> ⚠️ **What panelist is and is not for.** A synthetic persona is a *model* of a customer, and your model of the customer is wrong — that is why you talk to real people. panelist is legitimate as a **drafting aid**, a **cheap pre-filter** to kill obviously-weak drafts before spending a human's attention, and a way to catch obvious misses. It is **not** evidence about real readers, **not** a substitute for talking to them, and **not** validation. "Our personas responded well to this" is a sentence this tool is designed to make hard to write.
 
 ## Why it's different
 
-Most tools that spawn personas emit a warmth/viability *score* — the exact output that invites "look, the AI loves it" misuse. plenum's primary output is a **deal-killer / cut-list**: *where would this reader stop, dismiss, or refuse to forward?* Abandonment is behavioural and far more robustly simulable than affect.
+Most tools that spawn personas emit a warmth/viability *score* — the exact output that invites "look, the AI loves it" misuse. panelist's primary output is a **deal-killer / cut-list**: *where would this reader stop, dismiss, or refuse to forward?* Abandonment is behavioural and far more robustly simulable than affect.
 
 - **Deal-killers, not scores.** The default verdict is a cut-list, not a rating.
 - **Cross-model panels.** ≥2 providers by default (built on a provider abstraction — PromptFoo/LiteLLM — not hand-rolled) to counter same-model self-preference / sycophancy bias.
@@ -22,7 +22,7 @@ See [`docs/synthetic-persona-best-practices.md`](docs/synthetic-persona-best-pra
 
 ## Install
 
-plenum is published to GitHub Packages under the `@kromatic-innovation` scope, not the public npm registry. Since the package is private-org-scoped, consumers need a GitHub Packages read token in addition to pointing the scope at the right registry.
+panelist is published to GitHub Packages under the `@kromatic-innovation` scope, not the public npm registry. Since the package is private-org-scoped, consumers need a GitHub Packages read token in addition to pointing the scope at the right registry.
 
 Add to your project's `.npmrc`:
 
@@ -36,11 +36,11 @@ Add to your project's `.npmrc`:
 Then install as usual:
 
 ```
-npm install @kromatic-innovation/plenum
+npm install panelist
 ```
 
-> Once plenum is open-sourced, it will also be published to the public npm
-> registry, at which point `npm i @kromatic-innovation/plenum` will work
+> Once panelist is open-sourced, it will also be published to the public npm
+> registry, at which point `npm i panelist` will work
 > directly with no `.npmrc` changes needed.
 
 ## Use cases
@@ -55,8 +55,8 @@ npm install @kromatic-innovation/plenum
 A persona is a durable **identity** record (what it rewards, punishes, and quits over). The **task** (vote / comment / converse) is supplied by the caller at invocation time — so one definition answers any instruction, with no new consumer script per use case. See [`docs/invocation-contract.md`](docs/invocation-contract.md) for the formal task/response envelope. For the agentic plane, `src/lib/runner.mjs` (`renderRunnerPrompt` / `runPersona`, backing `.claude/agents/persona.md`) is a single generic runner for ANY registered persona by id — no per-persona agent files.
 
 ```js
-import { spawn } from "@kromatic-innovation/plenum";
-import reviewPack from "@kromatic-innovation/plenum/packs/review";
+import { spawn } from "panelist";
+import reviewPack from "panelist/packs/review";
 
 registerPersonas(reviewPack);
 const verdict = await spawn("drive-by-installer", {

@@ -1,5 +1,5 @@
 // calibrate.mjs — calibration harness: synthetic persona verdicts vs INJECTED
-// real downstream signal (plenum#5, "Persona v2 — H").
+// real downstream signal (panelist#5, "Persona v2 — H").
 //
 // This joins each persona's SYNTHETIC per-item scores to a caller-supplied real
 // downstream signal (GA4 events, BigQuery conversion/bounce/forward data,

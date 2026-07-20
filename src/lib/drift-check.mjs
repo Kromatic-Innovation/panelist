@@ -1,7 +1,7 @@
 // drift-check.mjs — repo-scoped persona schema validator.
 //
 // The internal drift-check walked a whole monorepo (DEFAULT_ROOT_DIR) hunting for
-// inline copies that had drifted from a central register. plenum has no central
+// inline copies that had drifted from a central register. panelist has no central
 // register and no monorepo to scan: the records ARE the source of truth. So this
 // is re-scoped to validate THIS repo's own records against the schema
 // (schema.mjs) and flag duplicate ids. Wired to `npm run drift`.
@@ -9,7 +9,7 @@
 // Pure, injectable, zero-dep ESM. Nothing throws on bad input — an invalid record
 // is reported, not thrown.
 //
-// D7 (resolved, plenum#6): drift-check does NOT retarget to "register-vs-
+// D7 (resolved, panelist#6): drift-check does NOT retarget to "register-vs-
 // rendered-prompt" — after persona-as-subagent (cwc#1262) and the generic
 // runner (runner.mjs / D5), identity is rendered LIVE from the register at
 // call time, so there is no second static copy to drift against there.
@@ -60,7 +60,7 @@ export function checkRecords(records) {
 }
 
 /**
- * Honesty-stamp guardrail (plenum#6 / D7): check a batch of panel summaries
+ * Honesty-stamp guardrail (panelist#6 / D7): check a batch of panel summaries
  * (strings) or envelopes (objects) and report which ones (by index) omit the
  * honesty caveat. Never throws — delegates to assertHonestyStamped per item.
  * @param {Array<string|object>} summaries

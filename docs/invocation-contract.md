@@ -53,12 +53,12 @@ model and whether the prompt asks for a `verdict` field at all.
 `converse` both resolve to exactly one model call with a different
 instruction string — there is no dialogue state, no tool use, and no
 follow-up turn. A persistent, multi-turn/agentic converse plane (subagents,
-tool use, actual back-and-forth) is a **later slice (plenum#4)**, not
+tool use, actual back-and-forth) is a **later slice (panelist#4)**, not
 something this contract already does under a friendlier name.
 
 ## Two execution planes
 
-plenum ships two ways to invoke a persona, and both consume the **same
+panelist ships two ways to invoke a persona, and both consume the **same
 persona identity** (the register record: `caresAbout` / `rewards` / `punishes`
 / `quitsWhen`) and, for `spawn`, the **same wrapper contract** described here:
 
@@ -76,7 +76,7 @@ volume and the cross-model anti-sycophancy guarantee
 
 `spawn.mjs` is call-shaped: one `personaId`, one `{ mode, artifact, ... }`,
 one wrapper. Today that's a single model call; it's the foundation the
-richer agentic converse plane (plenum#4) builds on without changing this
+richer agentic converse plane (panelist#4) builds on without changing this
 contract.
 
 Use `score` for a rubric-driven verdict across a panel. Use `spawn` for one
@@ -188,14 +188,14 @@ const result = await spawn(
 
 Two later slices build on this contract without changing the wrapper shape:
 
-- **plenum#4 — agentic converse plane.** `converse` (and possibly `comment`)
+- **panelist#4 — agentic converse plane.** `converse` (and possibly `comment`)
   grows from one model call into a real multi-turn dialogue with subagents
   and tool use. The wrapper stays
   `{ personaId, mode, verdict, message, dealKillers }` — what changes is how
   many model calls produce that final `message`, not the shape returned.
-- **plenum#6 — honesty-guardrail auto-stamp.** Per
+- **panelist#6 — honesty-guardrail auto-stamp.** Per
   `synthetic-persona-best-practices.md` §6, every panel output should
   auto-stamp the "this is not user research" caveat by construction. Today
   that discipline lives in the surrounding docs/README, not the wrapper
-  itself. plenum#6 is expected to add the stamp as a field on this same
+  itself. panelist#6 is expected to add the stamp as a field on this same
   wrapper — additive, not a breaking reshape of `spawn`'s contract.

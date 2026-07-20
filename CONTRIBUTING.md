@@ -1,18 +1,18 @@
-# Contributing to plenum
+# Contributing to panelist
 
-Thanks for your interest in improving plenum. This is a small, focused
+Thanks for your interest in improving panelist. This is a small, focused
 library — please keep contributions scoped and traceable.
 
 ## Getting started
 
 ```bash
-git clone https://github.com/Kromatic-Innovation/plenum.git
-cd plenum
+git clone https://github.com/Kromatic-Innovation/panelist.git
+cd panelist
 npm test          # node --test test/*.test.mjs
 npm run drift     # src/lib/drift-check.mjs — checks persona/schema records for drift
 ```
 
-plenum has zero runtime dependencies (`type: module`, Node >=20). There is no
+panelist has zero runtime dependencies (`type: module`, Node >=20). There is no
 build step; `npm test` and `npm run drift` are the two commands CI runs.
 
 ## Branch and PR conventions
@@ -28,7 +28,7 @@ build step; `npm test` and `npm run drift` are the two commands CI runs.
 
 ## Scope discipline
 
-plenum is intentionally small. Before adding a feature, check whether it
+panelist is intentionally small. Before adding a feature, check whether it
 belongs in this library at all:
 
 - Core behavior (persona identity, task envelope, scoring, honesty stamping,
@@ -63,12 +63,12 @@ issue.
 
 ## Releasing
 
-plenum publishes to two registries: GitHub Packages on a GitHub Release
+panelist publishes to two registries: GitHub Packages on a GitHub Release
 (`.github/workflows/publish.yml`, internal/org consumers) and public npm on
-a version tag (`.github/workflows/release.yml`, `@kromatic-innovation/plenum`
+a version tag (`.github/workflows/release.yml`, `panelist`
 on `https://registry.npmjs.org`). To cut a release:
 
-1. Bump `version` in `package.json` and `PLENUM_VERSION` in `src/index.mjs`
+1. Bump `version` in `package.json` and `PANELIST_VERSION` in `src/index.mjs`
    to the same value — they must stay in sync.
 2. Add a `CHANGELOG.md` entry for the new version under
    `## [X.Y.Z] - YYYY-MM-DD`, moving relevant `[Unreleased]` notes into it.
@@ -77,7 +77,7 @@ on `https://registry.npmjs.org`). To cut a release:
 4. Cut a corresponding GitHub Release for the tag, which triggers
    `publish.yml` for the GitHub Packages side.
 
-**Pre-1.0 (0.x) semver rule:** while plenum is `0.x`, MINOR bumps (`0.x.0`)
+**Pre-1.0 (0.x) semver rule:** while panelist is `0.x`, MINOR bumps (`0.x.0`)
 may include breaking changes and PATCH bumps (`0.0.x`) are for fixes only —
 see `CHANGELOG.md` for the same rule stated for consumers.
 

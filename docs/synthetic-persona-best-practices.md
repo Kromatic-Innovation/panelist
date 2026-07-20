@@ -1,6 +1,6 @@
 # Synthetic persona best practices
 
-> This is the governing reference for the plenum persona system. Downstream slices
+> This is the governing reference for the panelist persona system. Downstream slices
 > (persona schema, packs, scoring, calibration) cite this doc rather than re-deriving
 > these rules. If a slice's design conflicts with something here, fix the slice or
 > propose an edit to this doc — don't silently diverge.
@@ -45,7 +45,7 @@ correlate with it in some cases and not others.
 
 Score behaviour, not affect. A verdict built around warmth ("how much would they
 like this?") is an invitation for the model — and the reader of the verdict — to
-mistake enthusiasm for validity. plenum's default output is a **deal-killer /
+mistake enthusiasm for validity. panelist's default output is a **deal-killer /
 cut-list**: where would this reader stop, dismiss, or refuse to forward? Abandonment
 is a behavioural event; it's far more robustly simulable than affect, and it doesn't
 grade on a curve the way a 1-10 "would you like this" score does.
@@ -119,8 +119,8 @@ useful, and fundamentally synthetic bar — it does not tell you a real reader w
 behave the same way. "Our personas responded well to this" is a sentence this system
 exists to make hard to write, and this doc exists to make hard to forget.
 
-This is not a new stance invented for this doc — it's the same line the plenum
-README draws (`⚠️ What plenum is and is not for`), restated here so every downstream
+This is not a new stance invented for this doc — it's the same line the panelist
+README draws (`⚠️ What panelist is and is not for`), restated here so every downstream
 slice inherits it without re-deriving it:
 
 - Legitimate uses: drafting aid, cut obviously-weak drafts before spending a human's

@@ -22,7 +22,7 @@ test("registerPersonas(reviewPack) then spawn(vote) returns a well-formed wrappe
     "drive-by-installer",
     {
       mode: "vote",
-      artifact: "# plenum\nA synthetic persona panel.\n\n## Philosophy\n...long prose...",
+      artifact: "# panelist\nA synthetic persona panel.\n\n## Philosophy\n...long prose...",
       instruction: "Would you get this installed in two minutes?",
       responseSchema: { type: "object", properties: { decision: { enum: ["approve", "reject"] } } },
     },

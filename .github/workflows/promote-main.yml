@@ -1,6 +1,6 @@
 name: Promote Main
 
-# Deliberate, human-triggered develop -> main promotion. plenum is a 2-tier
+# Deliberate, human-triggered develop -> main promotion. panelist is a 2-tier
 # npm library: develop is integration, main is the ref that downstream repos
 # install from (via GitHub Packages / git ref). There is no staging env and no
 # launchd deploy-guard checkout here — this is a plain private npm package

@@ -1,6 +1,6 @@
 // register.mjs — runtime persona registry (ported from cwc#736, generalized).
 //
-// The internal register.mjs read a single bundled data/register.json. plenum has
+// The internal register.mjs read a single bundled data/register.json. panelist has
 // no bundled roster: consumers COMPOSE their own registry at runtime from one or
 // more record sources (the shipped packs, plus their own private personas). So
 // this exposes:
@@ -68,7 +68,7 @@ export function registerPersonas(...sources) {
       const { ok, errors } = validatePersona(record);
       if (!ok) {
         throw new Error(
-          `plenum registerPersonas: invalid persona ${JSON.stringify(
+          `panelist registerPersonas: invalid persona ${JSON.stringify(
             record && record.id,
           )}: ${errors.join("; ")}`,
         );

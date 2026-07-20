@@ -1,15 +1,15 @@
-// schema.mjs — the plenum persona schema (v2, behavioural).
+// schema.mjs — the panelist persona schema (v2, behavioural).
 //
-// A plenum persona is identity-by-behaviour: what it cares about, rewards,
+// A panelist persona is identity-by-behaviour: what it cares about, rewards,
 // punishes, and quits over — never demographics-as-steering. This module is the
 // single source of truth for the record shape the loader, scorer, and
 // drift-check all validate against.
 //
-// v2 (plenum#2) is landed: the behavioural triple (rewards/punishes/quitsWhen)
+// v2 (panelist#2) is landed: the behavioural triple (rewards/punishes/quitsWhen)
 // is the required identity core; `lens` remains an optional DERIVED-SYNTHESIS
 // line layered on top (not a primary identity field, not required); and the
 // register carries a `usage` honesty header (see USAGE_HEADER) so every
-// composed registry states plenum's drafting-aid/pre-filter stance by default.
+// composed registry states panelist's drafting-aid/pre-filter stance by default.
 //
 // Pure, zero-dep ESM.
 
@@ -38,7 +38,7 @@ export const FORBIDDEN_FIELDS = ["age", "employer", "company", "tenure"];
 // downstream consumers should be able to detect/branch on.
 export const SCHEMA_VERSION = 2;
 
-// Canonical register-level honesty header (README "What plenum is and is not
+// Canonical register-level honesty header (README "What panelist is and is not
 // for" / docs/synthetic-persona-best-practices.md §6). This is the DEFAULT
 // usage caveat a registry carries when a source doesn't supply its own — see
 // register.mjs's getUsage(). Synthetic personas are a drafting aid and a cheap
@@ -52,7 +52,7 @@ export const USAGE_HEADER =
 export const PERSONA_SCHEMA = {
   version: SCHEMA_VERSION,
   description:
-    "A plenum persona is a behavioural stand-in for a real reader/buyer: identity is what it cares about, rewards, punishes, and quits over — not demographics.",
+    "A panelist persona is a behavioural stand-in for a real reader/buyer: identity is what it cares about, rewards, punishes, and quits over — not demographics.",
   shape: "{ id, name, role, caresAbout[], rewards[], punishes[], quitsWhen[], lens? }",
   required: REQUIRED_FIELDS,
   forbidden: FORBIDDEN_FIELDS,
