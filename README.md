@@ -4,6 +4,14 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Kromatic-Innovation/panelist/blob/develop/LICENSE)
 [![npm package](https://img.shields.io/github/package-json/v/Kromatic-Innovation/panelist)](https://github.com/Kromatic-Innovation/panelist/pkgs/npm/panelist)
 
+![panelist: three panelists reading a draft with exit-doors above their heads, a moderator directing the session](docs/assets/hero.png)
+
+**Use case:** you have a draft — marketing copy, a landing page, a pitch, a chapter — and want a fast, cheap read on where a real reader would bail, before you spend a human's attention on it.
+
+**Differentiator:** most synthetic-panel tools return a warmth/viability score, which invites "the AI loved it" misuse. panelist's primary output is a **deal-killer / cut-list**: the exact point a persona would quit, dismiss, or refuse to forward — abandonment is behavioral and far more reliably simulable than affect. Panels are cross-model by default (fighting same-model self-preference bias), personas differ by *what makes them quit* rather than demographics, and every output auto-stamps the honesty caveat that this is a pre-filter, not user research.
+
+**Why:** a 9/10 score from a model that wants to please you is worthless as a filter. A specific line where three independent, cross-model personas all bail is an actionable signal — that's the difference panelist is built around.
+
 **A synthetic persona panel that tells you where readers _quit_ — not how much they'd like it.** Cross-model by default to fight self-preference bias, and honest by construction that it's a cheap pre-filter, not user research.
 
 > ⚠️ **What panelist is and is not for.** A synthetic persona is a *model* of a customer, and your model of the customer is wrong — that is why you talk to real people. panelist is legitimate as a **drafting aid**, a **cheap pre-filter** to kill obviously-weak drafts before spending a human's attention, and a way to catch obvious misses. It is **not** evidence about real readers, **not** a substitute for talking to them, and **not** validation. "Our personas responded well to this" is a sentence this tool is designed to make hard to write.
