@@ -8,8 +8,9 @@
 //
 // Ported from the internal persona-review skill (cwc#1320 S1). The v2 schema
 // (plenum#2) is landed; the agentic entry point (plenum#4: spawn + the generic
-// runner) is now landing too. A live PromptFoo/LiteLLM provider and full
-// honesty guardrails (plenum#6) remain later slices.
+// runner) and the calibration harness (plenum#5: synthetic vs real signal) are
+// now landing too. A live PromptFoo/LiteLLM provider and full honesty
+// guardrails (plenum#6) remain later slices.
 export const PLENUM_VERSION = "0.0.0";
 
 // Registry — compose personas/rubrics at runtime.
@@ -44,6 +45,10 @@ export { spawn, buildSpawnPrompt } from "./lib/spawn.mjs";
 // Generic agentic runner (D5) — one runner, any registered persona, rendered
 // from the register at call time.
 export { renderRunnerPrompt, runPersona } from "./lib/runner.mjs";
+
+// Calibration harness (D6, deferred by design) — join synthetic verdicts to
+// an injected real downstream signal; no analytics provider is bundled.
+export { calibratePersonas, spearmanRankCorrelation, keptSetHitRate } from "./lib/calibrate.mjs";
 
 // Schema.
 export {
