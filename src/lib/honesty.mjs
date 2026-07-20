@@ -1,7 +1,7 @@
-// honesty.mjs — honesty guardrails on panel output (plenum#6).
+// honesty.mjs — honesty guardrails on panel output (panelist#6).
 //
 // D7 (resolved): after persona-as-subagent (cwc#1262) and the generic runner
-// (plenum#4 / D5), there is NO second static source of truth to drift
+// (panelist#4 / D5), there is NO second static source of truth to drift
 // against — the runner renders identity LIVE from the register at call time
 // (see runner.mjs), so drift-check does NOT need to retarget to
 // "register-vs-rendered-prompt" (that check would just re-verify the
@@ -22,7 +22,7 @@ import { USAGE_HEADER } from "./schema.mjs";
 import { getUsage } from "./register.mjs";
 
 // A short, stable substring of USAGE_HEADER. Chosen because it's the single
-// clause that most directly names what plenum is NOT — the phrase a summary
+// clause that most directly names what panelist is NOT — the phrase a summary
 // would have to actively strip to launder a cut-list into "validation".
 // Any composed register usage string that preserves this clause (the common
 // case: callers layer more words on, they don't excise the core sentence)

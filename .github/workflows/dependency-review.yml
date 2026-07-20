@@ -1,12 +1,12 @@
 name: Dependency Review
 
-# plenum ships with zero runtime dependencies, so this passes trivially today
+# panelist ships with zero runtime dependencies, so this passes trivially today
 # — it's here as a gate against any future dependency introducing a known
 # vulnerability or an unacceptable license.
 #
 # ADVISORY until go-public: the dependency-review API requires the GitHub
 # dependency graph, which on a PRIVATE repo needs GitHub Advanced Security.
-# Until plenum is public (the OSS release gate), the action can return 403, so
+# Until panelist is public (the OSS release gate), the action can return 403, so
 # the step is marked continue-on-error to avoid a spurious red check on a
 # zero-dependency repo. Flip continue-on-error off when the repo goes public.
 

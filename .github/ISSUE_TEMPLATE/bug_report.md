@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem with plenum
+about: Report a reproducible problem with panelist
 labels: bug
 ---
 
@@ -22,7 +22,7 @@ What you expected to happen instead.
 
 ## Environment
 
-- plenum version:
+- panelist version:
 - Node.js version (`node -v`):
 - OS:
 

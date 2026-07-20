@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes @kromatic-innovation/plenum to the PUBLIC npm registry
+# Publishes panelist to the PUBLIC npm registry
 # (https://registry.npmjs.org). This is DISTINCT from publish.yml, which
 # publishes the same package to GitHub Packages for internal/org consumers.
 #
@@ -14,18 +14,18 @@ name: Release
 #     the publish step below) — so a manual run can never do a real publish
 #     by accident.
 #
-# Auth: publishing to the public registry requires an npm automation token,
-# human-provisioned in repo settings as the `NPM_TOKEN` secret (this is NOT
-# the same as the built-in GITHUB_TOKEN used by publish.yml). `NPM_TOKEN`
-# must be added before the first real publish; until then this workflow can
-# still run in dry-run mode safely.
+# Auth is npm Trusted Publishing (OIDC) — no NPM_TOKEN secret, no long-lived
+# credential anywhere. `id-token: write` (below) lets npm CLI >=11.5.1 mint a
+# short-lived OIDC token and exchange it with the registry at publish time.
+# This requires a one-time bootstrap: npm's Trusted Publisher can only be
+# attached to a package that already exists, so the FIRST publish for a new
+# package must be a manual `npm publish` from a maintainer's logged-in
+# machine; every release after that runs through this workflow with zero
+# stored secrets. See tickle-stick's release.yml for the working reference.
 #
 # `--provenance` attaches npm provenance attestation to the published
 # package, which requires `id-token: write` permission (below) so the job
 # can mint an OIDC token to sign the attestation.
-#
-# The first LIVE publish happens at the OSS go-public gate, not at merge of
-# this workflow — landing this file only wires up the pipeline.
 
 on:
   push:
@@ -60,11 +60,7 @@ jobs:
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
         run: npm publish --dry-run --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish (real)
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

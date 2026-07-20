@@ -1,7 +1,15 @@
 name: Publish
 
-# Publishes @kromatic-innovation/plenum to GitHub Packages
+# Publishes this package to GitHub Packages for internal/org consumers
 # (https://npm.pkg.github.com, scope @kromatic-innovation).
+#
+# The package's PUBLIC identity (package.json `name`) is the unscoped
+# `panelist`, owned by an individual npm account — see release.yml. GitHub
+# Packages, unlike public npm, requires the published name to be scoped to
+# the publishing org, so this workflow renames the package in-CI before
+# publishing (`npm pkg set name=@kromatic-innovation/panelist`) and never
+# commits that rename back to the repo — mirrors how release.yml manipulates
+# package.json fields in-CI without touching the source of truth.
 #
 # Trigger model:
 #   - `release: published` — the real publish path. A human cuts a GitHub
@@ -14,7 +22,7 @@ name: Publish
 #
 # Auth: same-org GitHub Packages publish uses the built-in GITHUB_TOKEN
 # (via NODE_AUTH_TOKEN) — no external PAT/secret needed, since this repo and
-# the package's org scope are both Kromatic-Innovation.
+# the internal-publish scope are both Kromatic-Innovation.
 
 on:
   release:
@@ -45,6 +53,9 @@ jobs:
 
       - name: Run tests (pre-publish gate)
         run: node --test test/*.test.mjs
+
+      - name: Rename to org-scoped identity for GitHub Packages
+        run: npm pkg set name=@kromatic-innovation/panelist
 
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'

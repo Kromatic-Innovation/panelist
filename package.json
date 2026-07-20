@@ -1,11 +1,11 @@
 {
-  "name": "@kromatic-innovation/plenum",
+  "name": "panelist",
   "version": "0.1.0",
   "description": "A synthetic persona panel that tells you where readers quit — not how much they'd like it. Cross-model by default, honest by construction that it's a pre-filter, not user research.",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/Kromatic-Innovation/plenum#readme",
+  "homepage": "https://github.com/Kromatic-Innovation/panelist#readme",
   "bugs": {
-    "url": "https://github.com/Kromatic-Innovation/plenum/issues"
+    "url": "https://github.com/Kromatic-Innovation/panelist/issues"
   },
   "author": "Kromatic",
   "keywords": [
@@ -30,7 +30,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Kromatic-Innovation/plenum.git"
+    "url": "git+https://github.com/Kromatic-Innovation/panelist.git"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

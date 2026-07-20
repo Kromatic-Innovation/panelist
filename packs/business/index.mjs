@@ -1,7 +1,7 @@
 // packs/business — example business-case personas (toggleable; not auto-registered).
 // Identity is behavioural: what they reward, punish, and quit over. No demographics
 // as steering — the "middle class" / "B2B" framing is a role/context, not an age or employer.
-// These are EXAMPLES for demoing plenum's use cases, not a real customer roster.
+// These are EXAMPLES for demoing panelist's use cases, not a real customer roster.
 
 export const midMarketConsumer = {
   id: "mid-market-consumer",

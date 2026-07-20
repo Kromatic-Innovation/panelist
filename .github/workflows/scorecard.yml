@@ -5,7 +5,7 @@ name: Scorecard
 #
 # ADVISORY until go-public: Scorecard's publish_results and the code-scanning
 # SARIF upload need a PUBLIC repo (and/or GitHub Advanced Security) to succeed.
-# While plenum is private, publish_results is false and the private-only steps
+# While panelist is private, publish_results is false and the private-only steps
 # are continue-on-error so this never leaves a red run on develop. At the OSS
 # go-public gate: set publish_results: true and drop the continue-on-error.
 

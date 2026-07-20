@@ -1,4 +1,4 @@
-// runner.mjs — the generic agentic persona runner (plenum#4 slice E, decision D5).
+// runner.mjs — the generic agentic persona runner (panelist#4 slice E, decision D5).
 //
 // D5 (resolved): ONE generic runner rendered from the register at call time —
 // NOT 22 static per-persona agent files. The register (register.mjs) stays the
@@ -39,7 +39,7 @@ import { spawn, buildSpawnPrompt } from "./spawn.mjs";
 export function renderRunnerPrompt(personaId, task = {}, deps = {}) {
   const persona = getPersona(personaId);
   if (!persona) {
-    throw new Error(`plenum runner: unknown persona ${JSON.stringify(personaId)} — register it first.`);
+    throw new Error(`panelist runner: unknown persona ${JSON.stringify(personaId)} — register it first.`);
   }
   const build = deps.buildPrompt || buildSpawnPrompt;
   const { mode, artifact, instruction, responseSchema, horizon } = task;

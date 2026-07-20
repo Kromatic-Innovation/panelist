@@ -25,7 +25,7 @@
 //
 // Every evaluation this module returns (scoreCandidate/score, including the
 // neutralFallback path) is auto-stamped with `honesty: USAGE_HEADER`
-// (plenum#6) — the static default caveat, not the live register header. This
+// (panelist#6) — the static default caveat, not the live register header. This
 // module intentionally stays free of register.mjs state; a caller who wants
 // the composed register header instead can re-stamp via honesty.mjs's
 // stampHonesty(evaluation, getUsage()).
@@ -259,7 +259,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   const panel = Array.isArray(deps.panel) ? deps.panel : [];
   if (panel.length === 0) {
     throw new Error(
-      "plenum score: inject a model panel (deps.panel: [{ model, complete }]). " +
+      "panelist score: inject a model panel (deps.panel: [{ model, complete }]). " +
         "No live provider is bundled — pass a mock in tests, or a PromptFoo/LiteLLM adapter in production.",
     );
   }
@@ -337,7 +337,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   };
 }
 
-/** Public alias — the exported name per the plenum contract. */
+/** Public alias — the exported name per the panelist contract. */
 export const score = scoreCandidate;
 
 function axisMean(scoreObj, axes) {

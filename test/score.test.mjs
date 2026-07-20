@@ -49,7 +49,7 @@ test("whole-panel failure returns the marked neutral fallback", async () => {
   assert.match(res.scores.byPersona[0].note, /HUMAN REVIEW/);
 });
 
-test("score() output is auto-stamped with the honesty caveat (plenum#6)", async () => {
+test("score() output is auto-stamped with the honesty caveat (panelist#6)", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
   const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });
   assert.equal(typeof res.honesty, "string");

@@ -5,7 +5,7 @@
 //
 // One persona, one turn, one wrapper. This is the FOUNDATIONAL single-turn
 // contract; the richer agentic/converse plane (multi-turn dialogue, tool use) is
-// a later slice (plenum#4). Here, every mode resolves to a single model call:
+// a later slice (panelist#4). Here, every mode resolves to a single model call:
 //
 //   mode "vote"     — render a judgement. `verdict` is filled IFF a responseSchema
 //                     is supplied (the schema describes the verdict shape).
@@ -17,7 +17,7 @@
 //   - `verdict`     is non-null ONLY when responseSchema was supplied.
 //   - `dealKillers` is ALWAYS an array (possibly empty) — a persona may always
 //     surface blocking objections regardless of mode. (Full honesty-guardrail
-//     auto-stamping is plenum#6; this just keeps the wrapper caveat-capable.)
+//     auto-stamping is panelist#6; this just keeps the wrapper caveat-capable.)
 //
 // The model client is INJECTED (deps.client), the same adapter shape score.mjs
 // uses: { model, complete: async ({prompt, maxTokens, temperature}) =>
@@ -33,7 +33,7 @@ const throwingClient = {
   model: "none",
   async complete() {
     throw new Error(
-      "plenum spawn: inject a client (deps.client: { model, complete }). " +
+      "panelist spawn: inject a client (deps.client: { model, complete }). " +
         "No live provider is bundled — pass a mock in tests, or a PromptFoo/LiteLLM adapter in production.",
     );
   },
@@ -122,11 +122,11 @@ function normalizeDealKillers(v) {
 export async function spawn(personaId, opts = {}, deps = {}) {
   const { mode, artifact, instruction, responseSchema, horizon } = opts;
   if (!MODES.has(mode)) {
-    throw new Error(`plenum spawn: mode must be one of ${[...MODES].join("|")} (got ${JSON.stringify(mode)})`);
+    throw new Error(`panelist spawn: mode must be one of ${[...MODES].join("|")} (got ${JSON.stringify(mode)})`);
   }
   const persona = getPersona(personaId);
   if (!persona) {
-    throw new Error(`plenum spawn: unknown persona ${JSON.stringify(personaId)} — register it first.`);
+    throw new Error(`panelist spawn: unknown persona ${JSON.stringify(personaId)} — register it first.`);
   }
 
   const client = deps.client || throwingClient;
@@ -135,7 +135,7 @@ export async function spawn(personaId, opts = {}, deps = {}) {
 
   const res = await client.complete({ prompt, maxTokens: 1024, temperature: 0 });
   if (!res || res.ok !== true || typeof res.text !== "string") {
-    throw new Error(`plenum spawn: client returned no usable text for ${JSON.stringify(personaId)}`);
+    throw new Error(`panelist spawn: client returned no usable text for ${JSON.stringify(personaId)}`);
   }
 
   const parsed = extractJsonObject(res.text) || {};
