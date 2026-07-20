@@ -1,0 +1,59 @@
+name: Publish
+
+# Publishes @kromatic-innovation/plenum to GitHub Packages
+# (https://npm.pkg.github.com, scope @kromatic-innovation).
+#
+# Trigger model:
+#   - `release: published` — the real publish path. A human cuts a GitHub
+#     Release (tagging the version to ship) and this runs `npm publish`.
+#   - `workflow_dispatch` — manual runs, for validating the pipeline without
+#     cutting a release. Defaults to `dry_run: true`, and anything other than
+#     an explicit `dry_run: false` is treated as a dry run (see the guard on
+#     the publish step below) — so a manual run can never do a real publish
+#     by accident.
+#
+# Auth: same-org GitHub Packages publish uses the built-in GITHUB_TOKEN
+# (via NODE_AUTH_TOKEN) — no external PAT/secret needed, since this repo and
+# the package's org scope are both Kromatic-Innovation.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run only (no real publish)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@kromatic-innovation"
+
+      - name: Run tests (pre-publish gate)
+        run: node --test test/*.test.mjs
+
+      - name: Publish (dry run)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
+        run: npm publish --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish (real)
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
