@@ -60,3 +60,29 @@ framework.
 Use the issue templates under `.github/ISSUE_TEMPLATE/`. For security
 vulnerabilities, see [`SECURITY.md`](SECURITY.md) instead of filing a public
 issue.
+
+## Releasing
+
+plenum publishes to two registries: GitHub Packages on a GitHub Release
+(`.github/workflows/publish.yml`, internal/org consumers) and public npm on
+a version tag (`.github/workflows/release.yml`, `@kromatic-innovation/plenum`
+on `https://registry.npmjs.org`). To cut a release:
+
+1. Bump `version` in `package.json` and `PLENUM_VERSION` in `src/index.mjs`
+   to the same value — they must stay in sync.
+2. Add a `CHANGELOG.md` entry for the new version under
+   `## [X.Y.Z] - YYYY-MM-DD`, moving relevant `[Unreleased]` notes into it.
+3. Commit, then tag the release commit `vX.Y.Z` and push the tag. Pushing a
+   `v*` tag triggers `release.yml`, which publishes to public npm.
+4. Cut a corresponding GitHub Release for the tag, which triggers
+   `publish.yml` for the GitHub Packages side.
+
+**Pre-1.0 (0.x) semver rule:** while plenum is `0.x`, MINOR bumps (`0.x.0`)
+may include breaking changes and PATCH bumps (`0.0.x`) are for fixes only —
+see `CHANGELOG.md` for the same rule stated for consumers.
+
+**Before the first public-npm publish:** an `NPM_TOKEN` secret (a
+human-provisioned npm automation token with publish rights for
+`@kromatic-innovation`) must be added in repo settings, or `release.yml`
+will fail at the real-publish step. Until then, `workflow_dispatch` dry runs
+are safe to use for validating the pipeline.
