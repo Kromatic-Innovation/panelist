@@ -1,15 +1,53 @@
 // @kromatic-innovation/plenum — public entrypoint.
 //
-// Extraction in progress (cwc#1320 S1): the engine is being ported from the
-// internal persona-review skill. This entrypoint will re-export:
-//   - registerPersonas / getPersonas / getRubric   (from ./lib/register.mjs)
-//   - score                                          (from ./lib/score.mjs, cross-model)
-//   - spawn                                          (the vote/comment/converse contract, #1263 slice E)
-//   - the persona schema + drift-check
+// A synthetic persona panel that tells you where readers quit. Compose a registry
+// from packs (or your own records), then score() a candidate across a cross-model
+// panel, or spawn() a single persona for a vote/comment/converse turn. No live
+// provider is bundled — inject a client/panel (mock in tests; PromptFoo/LiteLLM
+// adapter in production).
 //
-// Cross-model provider dispatch builds on PromptFoo/LiteLLM, not hand-rolled.
+// Ported from the internal persona-review skill (cwc#1320 S1). The v2 schema
+// (plenum#2), a live PromptFoo/LiteLLM provider, full honesty guardrails
+// (plenum#6), and the agentic converse plane (plenum#4) are later slices.
 export const PLENUM_VERSION = "0.0.0";
 
-export function registerPersonas() {
-  throw new Error("plenum: engine port in progress (cwc#1320 S1). See PORTING.md.");
-}
+// Registry — compose personas/rubrics at runtime.
+export {
+  registerPersonas,
+  registerRubric,
+  getPersona,
+  getPersonas,
+  getRubric,
+  clearRegistry,
+} from "./lib/register.mjs";
+
+// Cross-model scoring.
+export {
+  score,
+  scoreCandidate,
+  rankCandidatesWith,
+  createLimiter,
+  normalizeRubric,
+  decideVerdict,
+  extractScore,
+  extractJsonObject,
+  buildEvalPrompt,
+  renderPersona,
+  providerOf,
+} from "./lib/score.mjs";
+
+// Single-turn invocation contract.
+export { spawn, buildSpawnPrompt } from "./lib/spawn.mjs";
+
+// Schema.
+export {
+  PERSONA_SCHEMA,
+  PERSONA_FIELDS,
+  REQUIRED_FIELDS,
+  FORBIDDEN_FIELDS,
+  validatePersona,
+  isPersonaShaped,
+} from "./lib/schema.mjs";
+
+// Drift-check (repo-scoped record validation).
+export { checkRecords, scanRepo as driftScanRepo, formatReport as formatDriftReport } from "./lib/drift-check.mjs";
