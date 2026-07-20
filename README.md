@@ -39,6 +39,10 @@ Then install as usual:
 npm install @kromatic-innovation/plenum
 ```
 
+> Once plenum is open-sourced, it will also be published to the public npm
+> registry, at which point `npm i @kromatic-innovation/plenum` will work
+> directly with no `.npmrc` changes needed.
+
 ## Use cases
 
 - "Give me feedback on this."

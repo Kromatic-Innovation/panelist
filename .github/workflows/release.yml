@@ -1,0 +1,70 @@
+name: Release
+
+# Publishes @kromatic-innovation/plenum to the PUBLIC npm registry
+# (https://registry.npmjs.org). This is DISTINCT from publish.yml, which
+# publishes the same package to GitHub Packages for internal/org consumers.
+#
+# Trigger model:
+#   - `push: tags: ['v*']` — the real release path. A human (or the
+#     Releasing process in CONTRIBUTING.md) tags a commit `vX.Y.Z` and
+#     pushes the tag, which runs `npm publish --access public`.
+#   - `workflow_dispatch` — manual runs, for validating the pipeline without
+#     cutting a release. Defaults to `dry_run: true`, and anything other than
+#     an explicit `dry_run: false` is treated as a dry run (see the guard on
+#     the publish step below) — so a manual run can never do a real publish
+#     by accident.
+#
+# Auth: publishing to the public registry requires an npm automation token,
+# human-provisioned in repo settings as the `NPM_TOKEN` secret (this is NOT
+# the same as the built-in GITHUB_TOKEN used by publish.yml). `NPM_TOKEN`
+# must be added before the first real publish; until then this workflow can
+# still run in dry-run mode safely.
+#
+# `--provenance` attaches npm provenance attestation to the published
+# package, which requires `id-token: write` permission (below) so the job
+# can mint an OIDC token to sign the attestation.
+#
+# The first LIVE publish happens at the OSS go-public gate, not at merge of
+# this workflow — landing this file only wires up the pipeline.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run only (no real publish)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  release:
+    name: Publish to public npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Run tests (pre-publish gate)
+        run: node --test test/*.test.mjs
+
+      - name: Publish (dry run)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
+        run: npm publish --dry-run --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish (real)
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
