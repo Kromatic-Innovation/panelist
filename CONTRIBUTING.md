@@ -81,8 +81,13 @@ on `https://registry.npmjs.org`). To cut a release:
 may include breaking changes and PATCH bumps (`0.0.x`) are for fixes only —
 see `CHANGELOG.md` for the same rule stated for consumers.
 
-**Before the first public-npm publish:** an `NPM_TOKEN` secret (a
-human-provisioned npm automation token with publish rights for
-`@kromatic-innovation`) must be added in repo settings, or `release.yml`
-will fail at the real-publish step. Until then, `workflow_dispatch` dry runs
-are safe to use for validating the pipeline.
+**Publish auth is npm Trusted Publishing (OIDC) — there is no `NPM_TOKEN`
+secret.** `release.yml` mints a short-lived OIDC token at publish time
+(`id-token: write`), so no long-lived credential is stored anywhere. The one
+manual step is the *bootstrap*: npm can only attach a Trusted Publisher to a
+package that already exists, so the **first** publish for the package had to be
+a manual `npm publish` from a maintainer's logged-in machine. Every release
+after that runs through `release.yml` on a pushed `v*` tag with zero stored
+secrets. Until a Trusted Publisher is configured, `workflow_dispatch` dry runs
+are safe for validating the pipeline. See `.github/workflows/release.yml` for
+the authoritative auth model.
