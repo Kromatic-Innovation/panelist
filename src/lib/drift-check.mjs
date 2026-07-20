@@ -11,6 +11,11 @@
 
 import { validatePersona } from "./schema.mjs";
 
+// validatePersona is schema-driven (schema.mjs), so this already enforces the
+// v2 shape as a side effect: the behavioural triple (rewards/punishes/quitsWhen)
+// required, `lens` optional/derived, forbidden demographic fields rejected. No
+// v2-specific logic belongs here — it would just duplicate schema.mjs.
+
 /**
  * Validate a flat list of records against the schema and flag duplicate ids.
  * @param {object[]} records
