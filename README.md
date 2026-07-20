@@ -22,26 +22,13 @@ See [`docs/synthetic-persona-best-practices.md`](docs/synthetic-persona-best-pra
 
 ## Install
 
-panelist is published to GitHub Packages under the `@kromatic-innovation` scope, not the public npm registry. Since the package is private-org-scoped, consumers need a GitHub Packages read token in addition to pointing the scope at the right registry.
-
-Add to your project's `.npmrc`:
-
-```
-@kromatic-innovation:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```bash
+npm i panelist
 ```
 
-`GITHUB_TOKEN` here is a PAT (or CI-provided `GITHUB_TOKEN`) with `read:packages` scope on the Kromatic-Innovation org.
-
-Then install as usual:
-
-```
-npm install panelist
-```
-
-> Once panelist is open-sourced, it will also be published to the public npm
-> registry, at which point `npm i panelist` will work
-> directly with no `.npmrc` changes needed.
+panelist is published to the public npm registry as the unscoped package
+`panelist` (via OIDC Trusted Publishing — no token needed), owned by `trikro`.
+No `.npmrc` changes required.
 
 ## Use cases
 
