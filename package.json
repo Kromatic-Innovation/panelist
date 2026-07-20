@@ -1,0 +1,25 @@
+{
+  "name": "@kromatic-innovation/plenum",
+  "version": "0.0.0",
+  "description": "A synthetic persona panel that tells you where readers quit — not how much they'd like it. Cross-model by default, honest by construction that it's a pre-filter, not user research.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./packs/review": "./packs/review/index.mjs",
+    "./packs/business": "./packs/business/index.mjs"
+  },
+  "files": ["src", "packs"],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "drift": "node src/lib/drift-check.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kromatic-Innovation/plenum.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": { "node": ">=20" }
+}
