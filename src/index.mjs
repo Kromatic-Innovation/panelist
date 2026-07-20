@@ -7,9 +7,9 @@
 // adapter in production).
 //
 // Ported from the internal persona-review skill (cwc#1320 S1). The v2 schema
-// (plenum#2) is landed; a live PromptFoo/LiteLLM provider, full honesty
-// guardrails (plenum#6), and the agentic converse plane (plenum#4) are later
-// slices.
+// (plenum#2) is landed; the agentic entry point (plenum#4: spawn + the generic
+// runner) is now landing too. A live PromptFoo/LiteLLM provider and full
+// honesty guardrails (plenum#6) remain later slices.
 export const PLENUM_VERSION = "0.0.0";
 
 // Registry — compose personas/rubrics at runtime.
@@ -40,6 +40,10 @@ export {
 
 // Single-turn invocation contract.
 export { spawn, buildSpawnPrompt } from "./lib/spawn.mjs";
+
+// Generic agentic runner (D5) — one runner, any registered persona, rendered
+// from the register at call time.
+export { renderRunnerPrompt, runPersona } from "./lib/runner.mjs";
 
 // Schema.
 export {
