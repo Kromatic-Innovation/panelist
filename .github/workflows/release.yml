@@ -69,6 +69,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
         run: npm publish --dry-run --access public
 
+      # OIDC trusted publishing signs provenance correctly but the actual
+      # publish PUT 404s (npm/cli#9088 — same failure tickle-stick hit and
+      # tracked in tickle-stick#38). Falling back to a classic automation
+      # token for the publish step itself; provenance signing is a separate
+      # OIDC code path that already works, so --provenance stays.
       - name: Publish (real)
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
