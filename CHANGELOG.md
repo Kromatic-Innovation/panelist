@@ -13,6 +13,12 @@ takes over.
 
 ## [Unreleased]
 
+- Completed the internal-tracker leak sweep: removed the residual internal
+  issue-tracker IDs and version codenames left in the README Status line and
+  five source-file headers (`src/index.mjs`, `src/lib/register.mjs`,
+  `src/lib/score.mjs`, `src/lib/honesty.mjs`, `src/lib/drift-check.mjs`).
+  Comment/doc-only — no behaviour change. Public `panelist#N` references are
+  preserved.
 - Removed the obsolete internal `PORTING.md` port-plan doc (the port it
   described is complete; it leaked internal codenames and tracking IDs into
   this public repo).

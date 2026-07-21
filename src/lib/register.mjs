@@ -1,4 +1,4 @@
-// register.mjs — runtime persona registry (ported from cwc#736, generalized).
+// register.mjs — runtime persona registry (ported from an internal persona-review engine, generalized).
 //
 // The internal register.mjs read a single bundled data/register.json. panelist has
 // no bundled roster: consumers COMPOSE their own registry at runtime from one or

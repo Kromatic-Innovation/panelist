@@ -6,7 +6,7 @@
 // provider is bundled — inject a client/panel (mock in tests; PromptFoo/LiteLLM
 // adapter in production).
 //
-// Ported from the internal persona-review skill (cwc#1320 S1). The v2 schema
+// Ported from the internal persona-review skill. The v2 schema
 // (panelist#2) is landed; the agentic entry point (panelist#4: spawn + the generic
 // runner) and the calibration harness (panelist#5: synthetic vs real signal) are
 // landed too. Full honesty guardrails (panelist#6) are now landing: every panel

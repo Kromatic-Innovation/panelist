@@ -1,4 +1,4 @@
-// score.mjs — cross-model persona scoring harness (ported from cwc#736 / V6).
+// score.mjs — cross-model persona scoring harness (ported from an internal persona-review engine).
 //
 // Given a candidate artifact, a persona list, and a RUBRIC (axes + kill axes +
 // kill floor + cut threshold), it runs each persona x model pairing, parses

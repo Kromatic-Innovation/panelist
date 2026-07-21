@@ -1,6 +1,6 @@
 // honesty.mjs — honesty guardrails on panel output (panelist#6).
 //
-// D7 (resolved): after persona-as-subagent (cwc#1262) and the generic runner
+// D7 (resolved): after persona-as-subagent and the generic runner
 // (panelist#4 / D5), there is NO second static source of truth to drift
 // against — the runner renders identity LIVE from the register at call time
 // (see runner.mjs), so drift-check does NOT need to retarget to
@@ -9,7 +9,7 @@
 // KEEPS its record-schema validation role (schema.mjs) and GAINS honesty-
 // stamp coverage: this module's assertHonestyStamped is what drift-check
 // (drift-check.mjs's checkHonesty) calls to prove no summary omits the
-// caveat. See Kromatic-Innovation/code-workspace-config#1262.
+// caveat.
 //
 // Practical rules this module exists to enforce (docs/synthetic-persona-
 // best-practices.md §6):
