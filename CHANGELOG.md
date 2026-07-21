@@ -11,7 +11,32 @@ MINOR releases (`0.x.0`) may include breaking changes, and PATCH releases
 reaches `1.0.0`, standard semver discipline (breaking changes only on MAJOR)
 takes over.
 
-## [Unreleased]
+## [0.2.0] - 2026-07-21
+
+New MINOR release (pre-1.0 semantics — see above): the multi-turn **junction
+contract** subsystem landed as a new public feature across #46/#47/#48, so this
+is the release it belongs to, distinct from the `0.1.1` docs-only patch. Bundles
+the still-unreleased leak-sweep documentation fixes into the same version rather
+than splitting them into a separate tag.
+
+### Added
+
+- **Junction contract** — a multi-turn, structural-information-barrier engagement
+  primitive that reveals one junction at a time. New public exports from
+  `src/index.mjs`:
+  - `runJunctionLoop`, `BAIL` (`src/lib/junction.mjs`) — the generic
+    junction-graph + loop-runner that drives a hub-and-spoke or linear walk and
+    lets a persona bail out early.
+  - `ENGAGEMENT`, `REACTION_KEYS`, `TRACE_KEYS`, `deriveEngagement`,
+    `normalizeEngagement`, `reactionFrom`, `buildTrace`, `aggregateJunctionTraces`
+    (`src/lib/junction-schema.mjs`) — the generic reaction/decision schema,
+    run-level trace builder, and cross-run aggregation. The engine emits
+    mechanics; consumers own interpretation via `runJunctionLoop`'s `onComplete`
+    hook.
+- Junction contract documentation (`docs/junction-contract.md`) and two runnable
+  examples (`examples/junction-branching.mjs`, `examples/junction-linear-chain.mjs`).
+
+### Fixed
 
 - Completed the internal-tracker leak sweep: removed the residual internal
   issue-tracker IDs and version codenames left in the README Status line and
