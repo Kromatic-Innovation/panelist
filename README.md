@@ -1,7 +1,7 @@
 # panelist
 
 [![CI](https://github.com/Kromatic-Innovation/panelist/actions/workflows/ci.yml/badge.svg)](https://github.com/Kromatic-Innovation/panelist/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Kromatic-Innovation/panelist/blob/develop/LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Kromatic-Innovation/panelist/blob/main/LICENSE)
 [![npm version](https://img.shields.io/npm/v/panelist)](https://www.npmjs.com/package/panelist)
 
 ![panelist: three panelists reading a draft with exit-doors above their heads, a moderator directing the session](docs/assets/hero.png)
@@ -12,8 +12,6 @@
 
 **Why:** a 9/10 score from a model that wants to please you is worthless as a filter. A specific line where three independent, cross-model personas all bail is an actionable signal — that's the difference panelist is built around.
 
-**A synthetic persona panel that tells you where readers _quit_ — not how much they'd like it.** Cross-model by default to fight self-preference bias, and honest by construction that it's a cheap pre-filter, not user research.
-
 > ⚠️ **What panelist is and is not for.** A synthetic persona is a *model* of a customer, and your model of the customer is wrong — that is why you talk to real people. panelist is legitimate as a **drafting aid**, a **cheap pre-filter** to kill obviously-weak drafts before spending a human's attention, and a way to catch obvious misses. It is **not** evidence about real readers, **not** a substitute for talking to them, and **not** validation. "Our personas responded well to this" is a sentence this tool is designed to make hard to write.
 
 ## Why it's different
@@ -21,7 +19,7 @@
 Most tools that spawn personas emit a warmth/viability *score* — the exact output that invites "look, the AI loves it" misuse. panelist's primary output is a **deal-killer / cut-list**: *where would this reader stop, dismiss, or refuse to forward?* Abandonment is behavioural and far more robustly simulable than affect.
 
 - **Deal-killers, not scores.** The default verdict is a cut-list, not a rating.
-- **Cross-model panels.** ≥2 providers by default (built on a provider abstraction — PromptFoo/LiteLLM — not hand-rolled) to counter same-model self-preference / sycophancy bias.
+- **Cross-model panels.** ≥2 providers by default (designed to wrap a provider layer you supply, e.g. PromptFoo/LiteLLM — not hand-rolled) to counter same-model self-preference / sycophancy bias.
 - **Diversity by kill-condition.** Personas differ by *what makes them quit*, not by demographics. Identity is behavioural (`rewards` / `punishes` / `quitsWhen`), never age/employer/tenure.
 - **Honesty by construction.** Every panel output auto-stamps the caveat above.
 - **Calibration hooks.** Join synthetic verdicts to real downstream signal and rank personas by how well they *predict*, not how well they *read*.
@@ -35,8 +33,9 @@ npm i panelist
 ```
 
 panelist is published to the public npm registry as the unscoped package
-`panelist` (via OIDC Trusted Publishing — no token needed), owned by `trikro`.
-No `.npmrc` changes required.
+`panelist` (via OIDC Trusted Publishing — no token needed): owned by Kromatic
+Innovation; published to npm from the `trikro` account. No `.npmrc` changes
+required.
 
 ## Use cases
 
@@ -52,8 +51,9 @@ A persona is a durable **identity** record (what it rewards, punishes, and quits
 > **Prerequisite:** panelist bundles **no live model**. You inject a client as
 > `spawn`'s third argument (`deps.client`) — its shape is
 > `{ model, complete: async ({ prompt }) => ({ ok, text, model }) }`, the same
-> adapter `score.mjs` uses. In production this wraps a PromptFoo/LiteLLM
-> provider; the default client throws so you can never accidentally run without
+> adapter `score.mjs` uses. In production this wraps a provider layer you
+> supply (e.g. PromptFoo/LiteLLM); the default client throws so you can never
+> accidentally run without
 > one. See [`docs/invocation-contract.md`](docs/invocation-contract.md).
 
 ```js
@@ -94,4 +94,4 @@ These are **examples**. Real, private persona rosters live in their owner's repo
 
 ## Status
 
-Early. Extracted from an internal persona-review engine (Kromatic-Innovation cwc#1320 / #1263). Apache-2.0.
+Early. Extracted from an internal persona-review engine. Apache-2.0.
