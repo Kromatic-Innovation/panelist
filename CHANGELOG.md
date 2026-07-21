@@ -13,6 +13,15 @@ takes over.
 
 ## [Unreleased]
 
+- Removed the obsolete internal `PORTING.md` port-plan doc (the port it
+  described is complete; it leaked internal codenames and tracking IDs into
+  this public repo).
+- Pointed the README npm badge at the public npm package page instead of
+  GitHub Packages, matching the public-npm install instructions.
+- Documented that `publishConfig.registry` in `package.json` is intentionally
+  pinned to GitHub Packages and is deliberately stripped by `release.yml`
+  before the public-npm publish.
+
 ## [0.1.1] - 2026-07-20
 
 Documentation-only patch release. No API or behavioural changes — this release
