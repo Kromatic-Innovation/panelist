@@ -1,0 +1,291 @@
+// junction.mjs — the generic junction-graph + loop-runner primitive (panelist#46, slice 1 of the multi-turn junction contract epic).
+//
+// This is the engine underneath the multi-turn information-barrier loop currently
+// hand-rolled in cwc's `jauss` skill. jauss walks a branching hub-and-spoke graph;
+// a future blog-engagement judge walks a linear hook->intro->body chain. Both need
+// the SAME core move — "reveal one junction at a time, let the persona decide what's
+// next, never let it see content it didn't choose" — so this builds ONE engine, not
+// two. jauss and the blog judge are just two graphs handed to the same runner.
+//
+//   runJunctionLoop(graph, persona, { horizon, spawnStrategy, client, patienceBudget })
+//     -> { strategy, entry, path, stopReason, turns, budgetRemaining, transcript }
+//
+// GRAPH SHAPE
+//   {
+//     junctions: {
+//       [id]: {
+//         content,            // string, OR (state) => string — resolved LAZILY (see barrier below)
+//         decisions(state),   // (state) => [{ id, label }] — forward moves from here; id is the TARGET junction id
+//         cost?,              // number, default 1 — patience this junction consumes when engaged (the graph's "rate")
+//       },
+//     },
+//     entry,                  // id of the starting junction
+//     patience?(horizon),     // optional (horizon) => number — seeds the patience budget from the horizon (jauss's drawn time-budget)
+//   }
+//
+// THE STRUCTURAL BARRIER (the whole point — not a convention the caller must remember)
+//   The runner is PHYSICALLY unable to hand the persona a junction's content before
+//   that junction is chosen. It only ever touches `graph.junctions[current]` — the
+//   junction it is standing on right now — and resolves that junction's `content`
+//   lazily, keyed off the decision just made. It NEVER iterates all junctions, never
+//   pre-assembles the graph into one big prompt, and never reads an unchosen
+//   junction's content. So an unchosen junction's content simply cannot leak into any
+//   prompt: there is no code path that reads it. (Directly asserted by the sentinel
+//   test in test/junction.test.mjs.)
+//
+// SPAWN STRATEGIES (both required; jauss treats them as an equally-valid cost-vs-
+// simplicity tradeoff left to the caller)
+//   "persistent" — one accumulating conversation across turns. Each turn appends the
+//                  current junction's view and the persona's reply to a running
+//                  transcript, and the whole transcript is re-sent. Context
+//                  accumulates naturally (higher token cost, zero bookkeeping).
+//   "respawn"    — a fresh call per turn, built from { horizon, transcriptSoFar,
+//                  currentJunctionOnly } (cheaper per call; the caller re-hydrates a
+//                  compact transcript rather than resending the full conversation).
+//   BOTH build the current-junction view through the SAME renderJunctionView helper,
+//   so the barrier logic lives in exactly one place and is never duplicated.
+//
+// THE MODEL CALL is the SAME injected-client contract spawn.mjs uses — deps/opts
+// `client: { model, complete: async ({prompt,maxTokens,temperature}) => {ok,text,model} }`.
+// We do NOT hand-roll a second model-call path: like spawn, every turn is one
+// `client.complete({ prompt })`, and the reply is parsed with score.mjs's
+// extractJsonObject. (spawn() itself is single-turn and registry-bound, so it can
+// neither hold the "persistent" accumulating conversation nor render the junction
+// view; this runner is the multi-turn generalization of the same contract, not a
+// competing one. The reaction/decision JSON schema + trace aggregation shape are the
+// NEXT slice and deliberately out of scope here — the persona just returns a loose
+// { reaction, decision }.)
+//
+// Pure, zero-dep beyond two existing helpers (renderPersona, extractJsonObject).
+
+import { renderPersona, extractJsonObject } from "./score.mjs";
+
+// Bail is always an available decision from every junction — the persona can quit
+// anywhere. Reserved id: a graph must not name a junction "bail".
+export const BAIL = "bail";
+const BAIL_DECISION = { id: BAIL, label: "Bail — stop here; you've seen enough." };
+
+// Default patience when neither the call nor the graph seeds one. Finite so a run
+// can always terminate even if the persona never bails and the graph has a cycle.
+const DEFAULT_PATIENCE = 12;
+
+/** Resolve a junction's content lazily, keyed off the current run state. */
+function resolveContent(junction, state) {
+  const c = junction.content;
+  return typeof c === "function" ? c(state) : c == null ? "" : String(c);
+}
+
+/** Render the persona block from a record (via renderPersona) or a raw string. */
+function renderPersonaBlock(persona) {
+  if (persona == null) return "";
+  return typeof persona === "string" ? persona : renderPersona(persona);
+}
+
+/** The forward decisions from a junction PLUS the always-available bail option. */
+function decisionsFor(junction, state) {
+  const forward = typeof junction.decisions === "function" ? junction.decisions(state) || [] : [];
+  return [...forward, BAIL_DECISION];
+}
+
+/**
+ * Render the view of ONE junction — its content plus the menu of decisions
+ * available from it. This is the ONLY place a junction's content enters a prompt,
+ * and it is only ever called for the CURRENT junction, so the barrier is structural.
+ *
+ * @returns {{ content: string, decisions: {id,label}[], text: string }}
+ */
+function renderJunctionView(junction, state) {
+  const content = resolveContent(junction, state);
+  const decisions = decisionsFor(junction, state);
+  const menu = decisions.map((d) => `  - ${d.id}: ${d.label}`).join("\n");
+  const text = [
+    "CURRENT JUNCTION:",
+    `"""${content}"""`,
+    "",
+    "YOUR AVAILABLE DECISIONS (choose exactly one by its id):",
+    menu,
+  ].join("\n");
+  return { content, decisions, text };
+}
+
+const CONTRACT = [
+  "Reply with ONLY a JSON object (no prose, no markdown fences):",
+  '{\n  "reaction": "<your in-voice reaction to THIS junction>",\n  "decision": "<the id of the one decision you choose>"\n}',
+].join("\n");
+
+/**
+ * Build the prompt for the "persistent" strategy: the full accumulating
+ * conversation so far, then this turn's junction view. Prior turns are the
+ * junctions the persona ALREADY chose (so re-sending them never breaks the
+ * barrier), plus the persona's own replies.
+ */
+function renderPersistentPrompt({ personaBlock, horizon, history, view }) {
+  const convo = history.flatMap((h) => [
+    `--- turn ${h.turn} @ junction "${h.junctionId}" ---`,
+    h.view.text,
+    `PERSONA REPLIED: ${JSON.stringify({ reaction: h.reaction, decision: h.decision })}`,
+  ]);
+  return [
+    "You are a persona walking a decision graph ONE junction at a time. You see only the junction you are standing on and the decisions available from it — never anything you did not choose.",
+    "",
+    personaBlock,
+    horizon ? `\nTIME HORIZON: ${horizon}` : "",
+    convo.length ? `\nCONVERSATION SO FAR:\n${convo.join("\n")}` : "",
+    "",
+    view.text,
+    "",
+    CONTRACT,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Build the prompt for the "respawn" strategy: a fresh call per turn assembled from
+ * { horizon, transcriptSoFar, currentJunctionOnly }. transcriptSoFar is a compact
+ * record of the junctions already visited (all chosen — barrier-safe) and the
+ * decisions taken; currentJunctionOnly is this turn's view.
+ */
+function renderRespawnPrompt({ personaBlock, horizon, history, view }) {
+  const transcriptSoFar = history.map(
+    (h) => `  turn ${h.turn}: at "${h.junctionId}" you reacted ${JSON.stringify(h.reaction)} and chose "${h.decision}".`,
+  );
+  return [
+    "You are a persona walking a decision graph ONE junction at a time. Each turn you are re-briefed with a short transcript of what you have done so far, then shown ONLY the junction you are standing on now.",
+    "",
+    personaBlock,
+    horizon ? `\nTIME HORIZON: ${horizon}` : "",
+    transcriptSoFar.length ? `\nTRANSCRIPT SO FAR:\n${transcriptSoFar.join("\n")}` : "\nTRANSCRIPT SO FAR: (this is your first junction)",
+    "",
+    view.text,
+    "",
+    CONTRACT,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+const RENDERERS = { persistent: renderPersistentPrompt, respawn: renderRespawnPrompt };
+
+/** Parse the persona's { reaction, decision } reply; tolerant of loose formatting. */
+function parseReply(text) {
+  const obj = extractJsonObject(text) || {};
+  const reaction = typeof obj.reaction === "string" ? obj.reaction : typeof text === "string" ? text.trim() : "";
+  const decision = typeof obj.decision === "string" ? obj.decision.trim() : null;
+  return { reaction, decision };
+}
+
+/**
+ * Run the junction loop: start at the entry junction, reveal one junction at a
+ * time, let the persona react and choose the next junction, and stop on bail,
+ * patience exhaustion, an invalid decision, or reaching a terminal junction.
+ *
+ * @param {object} graph    { junctions, entry, patience? } — see the GRAPH SHAPE header.
+ * @param {object|string} persona   a persona record (rendered via renderPersona) or a pre-rendered string.
+ * @param {object} opts
+ *   @param {string}  [opts.horizon]        passed to the persona and used to seed patience.
+ *   @param {"persistent"|"respawn"} [opts.spawnStrategy="persistent"]
+ *   @param {{model,complete}} opts.client  injected model client (same shape as spawn's deps.client).
+ *   @param {number|function} [opts.patienceBudget]  initial patience (number, or (state)=>number). Falls back to
+ *                                                    graph.patience(horizon), then DEFAULT_PATIENCE.
+ * @returns {Promise<{
+ *   strategy: string, entry: string,
+ *   path: {turn:number, junctionId:string, reaction:string, decision:string|null, budgetRemaining:number}[],
+ *   stopReason: "bail"|"budget-exhausted"|"terminal"|"invalid-decision",
+ *   turns: number, budgetRemaining: number,
+ *   transcript: {turn:number, junctionId:string, view:object, reaction:string, decision:string|null}[],
+ * }>}
+ */
+export async function runJunctionLoop(graph, persona, opts = {}) {
+  if (!graph || typeof graph.junctions !== "object" || graph.junctions == null) {
+    throw new Error("panelist junction: graph must be { junctions: {...}, entry }.");
+  }
+  const { horizon, spawnStrategy = "persistent", client, patienceBudget } = opts;
+  const render = RENDERERS[spawnStrategy];
+  if (!render) {
+    throw new Error(`panelist junction: spawnStrategy must be one of ${Object.keys(RENDERERS).join("|")} (got ${JSON.stringify(spawnStrategy)})`);
+  }
+  if (!client || typeof client.complete !== "function") {
+    throw new Error("panelist junction: inject a client (opts.client: { model, complete }) — no live provider is bundled.");
+  }
+  if (!(graph.entry in graph.junctions)) {
+    throw new Error(`panelist junction: entry ${JSON.stringify(graph.entry)} is not a junction in the graph.`);
+  }
+
+  const personaBlock = renderPersonaBlock(persona);
+
+  // Seed the patience budget. Explicit opt wins; then a graph-supplied patience(horizon); then the default.
+  const seed =
+    typeof patienceBudget === "function"
+      ? patienceBudget({ horizon })
+      : typeof patienceBudget === "number"
+        ? patienceBudget
+        : typeof graph.patience === "function"
+          ? graph.patience(horizon)
+          : DEFAULT_PATIENCE;
+  let budget = Number.isFinite(seed) ? seed : DEFAULT_PATIENCE;
+
+  const transcript = [];
+  const path = [];
+  let current = graph.entry;
+  let turn = 0;
+  let stopReason;
+
+  // Loop invariant: `current` is always a valid junction id we have NOT yet exceeded budget for.
+  while (true) {
+    const junction = graph.junctions[current];
+    const cost = typeof junction.cost === "number" ? junction.cost : 1;
+
+    // Patience gate: if we cannot afford to engage this junction, the persona's
+    // patience is spent — the run ends WITHOUT an explicit bail (distinguishable
+    // from a bail by stopReason).
+    if (budget < cost) {
+      stopReason = "budget-exhausted";
+      break;
+    }
+
+    const state = { horizon, junctionId: current, turn, budgetRemaining: budget, history: transcript };
+    const view = renderJunctionView(junction, state);
+
+    // Spend patience and take the turn.
+    budget -= cost;
+    turn += 1;
+    const prompt = render({ personaBlock, horizon, history: transcript, view });
+    const res = await client.complete({ prompt, maxTokens: 1024, temperature: 0 });
+    if (!res || res.ok !== true || typeof res.text !== "string") {
+      throw new Error(`panelist junction: client returned no usable text at junction ${JSON.stringify(current)}.`);
+    }
+    const { reaction, decision } = parseReply(res.text);
+
+    transcript.push({ turn, junctionId: current, view, reaction, decision });
+    path.push({ turn, junctionId: current, reaction, decision, budgetRemaining: budget });
+
+    const forwardIds = new Set(view.decisions.filter((d) => d.id !== BAIL).map((d) => d.id));
+
+    // Terminal junction: no onward decisions, so the walk is complete (the end of a
+    // linear hook->intro->body chain). This is the natural end and is reported
+    // distinctly from an early, voluntary bail — regardless of the reply, there is
+    // nowhere left to go.
+    if (forwardIds.size === 0) {
+      stopReason = "terminal";
+      break;
+    }
+
+    // Explicit bail — a clean, voluntary stop from a junction that DID offer a way forward.
+    if (decision === BAIL) {
+      stopReason = "bail";
+      break;
+    }
+
+    // The chosen decision must name an available forward junction; anything else
+    // (a hallucinated id, a null) ends the run cleanly rather than looping.
+    if (decision == null || !forwardIds.has(decision) || !(decision in graph.junctions)) {
+      stopReason = "invalid-decision";
+      break;
+    }
+
+    current = decision;
+  }
+
+  return { strategy: spawnStrategy, entry: graph.entry, path, stopReason, turns: turn, budgetRemaining: budget, transcript };
+}
