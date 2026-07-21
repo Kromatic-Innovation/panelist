@@ -49,6 +49,11 @@ export { spawn, buildSpawnPrompt } from "./lib/spawn.mjs";
 // from the register at call time.
 export { renderRunnerPrompt, runPersona } from "./lib/runner.mjs";
 
+// Multi-turn junction contract (slice 1) — the generic junction-graph + loop-runner
+// primitive underneath jauss's hub-and-spoke walk and a linear blog-engagement judge.
+// Reveals one junction at a time behind a structural information barrier.
+export { runJunctionLoop, BAIL } from "./lib/junction.mjs";
+
 // Calibration harness (D6, deferred by design) — join synthetic verdicts to
 // an injected real downstream signal; no analytics provider is bundled.
 export { calibratePersonas, spearmanRankCorrelation, keptSetHitRate } from "./lib/calibrate.mjs";
