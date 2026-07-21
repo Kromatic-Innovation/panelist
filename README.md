@@ -44,6 +44,16 @@ required.
 - "Given this paragraph, will you read the next one?"
 - Resume review, book-chapter reader panels, blog-post pre-filters, OSS-README review.
 
+### Multi-turn junction walks
+
+For the "will you read the next one?" use cases — walking a persona through a book
+(branching hub-and-spoke) or a blog post (a linear chain) **one junction at a time**,
+behind a structural information barrier — see the
+[junction contract](docs/junction-contract.md). It covers graph authoring, the engine
+guarantees (barrier, always-available bail, patience budget), and the consumer verdict
+hook, with two runnable worked examples ([branching](examples/junction-branching.mjs),
+[linear-chain](examples/junction-linear-chain.mjs)).
+
 ## Personas: identity is data, task is ephemeral
 
 A persona is a durable **identity** record (what it rewards, punishes, and quits over). The **task** (vote / comment / converse) is supplied by the caller at invocation time — so one definition answers any instruction, with no new consumer script per use case. See [`docs/invocation-contract.md`](docs/invocation-contract.md) for the formal task/response envelope. For the agentic plane, `src/lib/runner.mjs` (`renderRunnerPrompt` / `runPersona`, backing `.claude/agents/persona.md`) is a single generic runner for ANY registered persona by id — no per-persona agent files.
