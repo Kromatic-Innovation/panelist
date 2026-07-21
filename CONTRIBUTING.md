@@ -91,3 +91,14 @@ after that runs through `release.yml` on a pushed `v*` tag with zero stored
 secrets. Until a Trusted Publisher is configured, `workflow_dispatch` dry runs
 are safe for validating the pipeline. See `.github/workflows/release.yml` for
 the authoritative auth model.
+
+**Why `package.json`'s checked-in `publishConfig.registry` points at GitHub
+Packages.** This is intentional, not stale: `publish.yml` (internal/org side)
+relies on the checked-in `publishConfig.registry` pointing at
+`npm.pkg.github.com` to publish there. For the public-npm side, `release.yml`
+deliberately runs `npm pkg delete publishConfig.registry` before publishing,
+stripping it in-CI so that publish routes to the default `registry.npmjs.org`
+instead. So if you're reading `package.json` cold and wondering why it's
+pinned to GitHub Packages when consumers install from public npm — that's
+why: the pin is for one workflow, and the other workflow removes it before it
+ever reaches npmjs.org.

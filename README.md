@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Kromatic-Innovation/panelist/actions/workflows/ci.yml/badge.svg)](https://github.com/Kromatic-Innovation/panelist/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Kromatic-Innovation/panelist/blob/develop/LICENSE)
-[![npm package](https://img.shields.io/github/package-json/v/Kromatic-Innovation/panelist)](https://github.com/Kromatic-Innovation/panelist/pkgs/npm/panelist)
+[![npm version](https://img.shields.io/npm/v/panelist)](https://www.npmjs.com/package/panelist)
 
 ![panelist: three panelists reading a draft with exit-doors above their heads, a moderator directing the session](docs/assets/hero.png)
 
