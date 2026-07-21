@@ -54,6 +54,20 @@ export { renderRunnerPrompt, runPersona } from "./lib/runner.mjs";
 // Reveals one junction at a time behind a structural information barrier.
 export { runJunctionLoop, BAIL } from "./lib/junction.mjs";
 
+// Junction contract (slice 2) — the generic reaction/decision schema, run-level trace
+// builder, and cross-run aggregation. Engine emits mechanics; consumers own
+// interpretation via runJunctionLoop's onComplete hook.
+export {
+  ENGAGEMENT,
+  REACTION_KEYS,
+  TRACE_KEYS,
+  deriveEngagement,
+  normalizeEngagement,
+  reactionFrom,
+  buildTrace,
+  aggregateJunctionTraces,
+} from "./lib/junction-schema.mjs";
+
 // Calibration harness (D6, deferred by design) — join synthetic verdicts to
 // an injected real downstream signal; no analytics provider is bundled.
 export { calibratePersonas, spearmanRankCorrelation, keptSetHitRate } from "./lib/calibrate.mjs";

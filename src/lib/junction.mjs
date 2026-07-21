@@ -52,13 +52,18 @@
 // extractJsonObject. (spawn() itself is single-turn and registry-bound, so it can
 // neither hold the "persistent" accumulating conversation nor render the junction
 // view; this runner is the multi-turn generalization of the same contract, not a
-// competing one. The reaction/decision JSON schema + trace aggregation shape are the
-// NEXT slice and deliberately out of scope here — the persona just returns a loose
-// { reaction, decision }.)
+// competing one. The generic reaction/decision schema + run-level trace aggregation
+// land in the co-located junction-schema.mjs (panelist#47, slice 2): the loop now
+// captures a 3-state `engagement` per turn, returns a `trace` in the generic shape,
+// and invokes an optional consumer `onComplete(trace)` hook — mechanics only; all
+// interpretation (jauss's gates, a blog judge's continue/stop tally) stays in the
+// consumer's hook.)
 //
-// Pure, zero-dep beyond two existing helpers (renderPersona, extractJsonObject).
+// Pure, zero-dep beyond existing helpers (renderPersona, extractJsonObject) and the
+// co-located schema builder (buildTrace, normalizeEngagement).
 
 import { renderPersona, extractJsonObject } from "./score.mjs";
+import { buildTrace, normalizeEngagement } from "./junction-schema.mjs";
 
 // Bail is always an available decision from every junction — the persona can quit
 // anywhere. Reserved id: a graph must not name a junction "bail".
@@ -110,7 +115,8 @@ function renderJunctionView(junction, state) {
 
 const CONTRACT = [
   "Reply with ONLY a JSON object (no prose, no markdown fences):",
-  '{\n  "reaction": "<your in-voice reaction to THIS junction>",\n  "decision": "<the id of the one decision you choose>"\n}',
+  '{\n  "reaction": "<your in-voice reaction to THIS junction>",\n  "engagement": "kept" | "skimmed" | "bailed",\n  "decision": "<the id of the one decision you choose>"\n}',
+  'engagement: "kept" = you read this junction properly; "skimmed" = you skated over it; "bailed" = you are done here. It is optional — leave it out and it is inferred from your decision.',
 ].join("\n");
 
 /**
@@ -167,12 +173,13 @@ function renderRespawnPrompt({ personaBlock, horizon, history, view }) {
 
 const RENDERERS = { persistent: renderPersistentPrompt, respawn: renderRespawnPrompt };
 
-/** Parse the persona's { reaction, decision } reply; tolerant of loose formatting. */
+/** Parse the persona's { reaction, engagement?, decision } reply; tolerant of loose formatting. */
 function parseReply(text) {
   const obj = extractJsonObject(text) || {};
   const reaction = typeof obj.reaction === "string" ? obj.reaction : typeof text === "string" ? text.trim() : "";
   const decision = typeof obj.decision === "string" ? obj.decision.trim() : null;
-  return { reaction, decision };
+  const engagement = typeof obj.engagement === "string" ? obj.engagement.trim() : null;
+  return { reaction, engagement, decision };
 }
 
 /**
@@ -188,15 +195,24 @@ function parseReply(text) {
  *   @param {{model,complete}} opts.client  injected model client (same shape as spawn's deps.client).
  *   @param {number|function} [opts.patienceBudget]  initial patience (number, or (state)=>number). Falls back to
  *                                                    graph.patience(horizon), then DEFAULT_PATIENCE.
+ * @param {object} [hooks]
+ *   @param {(trace:object)=>any} [hooks.onComplete]  consumer verdict hook: invoked ONCE with the finished
+ *                                                    generic trace (see junction-schema.mjs) so a consumer can
+ *                                                    compute its OWN interpretation (jauss's gates, a blog judge's
+ *                                                    continue/stop tally) entirely outside the engine. The engine
+ *                                                    ships no default hook — its return value is surfaced as
+ *                                                    `verdict` and is otherwise ignored by the engine.
  * @returns {Promise<{
  *   strategy: string, entry: string,
- *   path: {turn:number, junctionId:string, reaction:string, decision:string|null, budgetRemaining:number}[],
+ *   path: {turn:number, junctionId:string, reaction:string, engagement:string, decision:string|null, budgetRemaining:number}[],
  *   stopReason: "bail"|"budget-exhausted"|"terminal"|"invalid-decision",
  *   turns: number, budgetRemaining: number,
- *   transcript: {turn:number, junctionId:string, view:object, reaction:string, decision:string|null}[],
+ *   transcript: {turn:number, junctionId:string, view:object, reaction:string, engagement:string, decision:string|null}[],
+ *   trace: {entryJunction:string, junctionTrace:object[], dropOff:{stoppedAt:string, reason:string}},
+ *   verdict: any,
  * }>}
  */
-export async function runJunctionLoop(graph, persona, opts = {}) {
+export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   if (!graph || typeof graph.junctions !== "object" || graph.junctions == null) {
     throw new Error("panelist junction: graph must be { junctions: {...}, entry }.");
   }
@@ -255,10 +271,14 @@ export async function runJunctionLoop(graph, persona, opts = {}) {
     if (!res || res.ok !== true || typeof res.text !== "string") {
       throw new Error(`panelist junction: client returned no usable text at junction ${JSON.stringify(current)}.`);
     }
-    const { reaction, decision } = parseReply(res.text);
+    const { reaction, engagement: rawEngagement, decision } = parseReply(res.text);
+    // Normalize the persona-reported engagement to the generic 3-state now (idempotent
+    // when re-projected by the schema builder), deriving it from the decision when the
+    // persona left it out — so `path`/`transcript` always carry a valid engagement.
+    const engagement = normalizeEngagement(rawEngagement, decision);
 
-    transcript.push({ turn, junctionId: current, view, reaction, decision });
-    path.push({ turn, junctionId: current, reaction, decision, budgetRemaining: budget });
+    transcript.push({ turn, junctionId: current, view, reaction, engagement, decision });
+    path.push({ turn, junctionId: current, reaction, engagement, decision, budgetRemaining: budget });
 
     const forwardIds = new Set(view.decisions.filter((d) => d.id !== BAIL).map((d) => d.id));
 
@@ -287,5 +307,12 @@ export async function runJunctionLoop(graph, persona, opts = {}) {
     current = decision;
   }
 
-  return { strategy: spawnStrategy, entry: graph.entry, path, stopReason, turns: turn, budgetRemaining: budget, transcript };
+  const result = { strategy: spawnStrategy, entry: graph.entry, path, stopReason, turns: turn, budgetRemaining: budget, transcript };
+
+  // The generic run-level trace (mechanics only). A consumer's onComplete hook may
+  // read it to compute its own interpretation; the engine bundles no default hook.
+  const trace = buildTrace(result);
+  const verdict = typeof hooks.onComplete === "function" ? await hooks.onComplete(trace) : null;
+
+  return { ...result, trace, verdict };
 }
