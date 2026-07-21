@@ -10,13 +10,12 @@
 // is reported, not thrown.
 //
 // D7 (resolved, panelist#6): drift-check does NOT retarget to "register-vs-
-// rendered-prompt" — after persona-as-subagent (cwc#1262) and the generic
+// rendered-prompt" — after persona-as-subagent and the generic
 // runner (runner.mjs / D5), identity is rendered LIVE from the register at
 // call time, so there is no second static copy to drift against there.
 // Instead this module KEEPS its record-schema validation role and GAINS one
 // new guardrail: checkHonesty, which proves no panel summary/envelope omits
-// the honesty caveat (honesty.mjs). See
-// Kromatic-Innovation/code-workspace-config#1262.
+// the honesty caveat (honesty.mjs).
 
 import { validatePersona } from "./schema.mjs";
 import { assertHonestyStamped } from "./honesty.mjs";
