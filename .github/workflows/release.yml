@@ -4,33 +4,30 @@ name: Release
 # (https://registry.npmjs.org). This is DISTINCT from publish.yml, which
 # publishes the same package to GitHub Packages for internal/org consumers.
 #
-# package.json's `publishConfig.registry` points at GitHub Packages (for
-# publish.yml's benefit) and takes precedence over setup-node's registry-url
-# for `npm publish` — this job deletes that field in-CI before publishing so
-# the release actually targets npmjs.org, mirroring ideate-core's release.yml.
+# The publish steps that used to be inlined here now live in a shared
+# reusable workflow, code-workspace-config's npm-oidc-publish.yml (cwc#1439),
+# which panelist / ideate-core / tickle-stick all call. Centralising the
+# steps means a future npm gotcha (the npm@11 trusted-publishing pin, the
+# publishConfig strip, provenance gating) is fixed once and every caller
+# inherits it, instead of each repo's release.yml drifting out of sync — the
+# exact drift that forced the 2026-07-21 npm@11 OIDC fix to be hand-copied
+# into this repo after two wrong intermediate fixes.
 #
-# Trigger model:
+# Trigger model (unchanged by the migration):
 #   - `push: tags: ['v*']` — the real release path. A human (or the
 #     Releasing process in CONTRIBUTING.md) tags a commit `vX.Y.Z` and
-#     pushes the tag, which runs `npm publish --access public`.
+#     pushes the tag, which runs a real `npm publish --access public`.
 #   - `workflow_dispatch` — manual runs, for validating the pipeline without
-#     cutting a release. Defaults to `dry_run: true`, and anything other than
-#     an explicit `dry_run: false` is treated as a dry run (see the guard on
-#     the publish step below) — so a manual run can never do a real publish
-#     by accident.
+#     cutting a release. Defaults to `dry_run: true`; only an explicit
+#     `dry_run: false` performs a real publish, so a manual run can never do
+#     a real publish by accident.
 #
 # Auth is npm Trusted Publishing (OIDC) — no NPM_TOKEN secret, no long-lived
-# credential anywhere. `id-token: write` (below) lets npm CLI >=11.5.1 mint a
-# short-lived OIDC token and exchange it with the registry at publish time.
-# This requires a one-time bootstrap: npm's Trusted Publisher can only be
-# attached to a package that already exists, so the FIRST publish for a new
-# package must be a manual `npm publish` from a maintainer's logged-in
-# machine; every release after that runs through this workflow with zero
-# stored secrets. See tickle-stick's release.yml for the working reference.
-#
-# `--provenance` attaches npm provenance attestation to the published
-# package, which requires `id-token: write` permission (below) so the job
-# can mint an OIDC token to sign the attestation.
+# credential anywhere. The reusable workflow's `id-token: write` permission
+# (granted on the caller job below, since permissions are NOT inherited into
+# a called workflow) lets npm CLI >=11.5.1 mint a short-lived OIDC token and
+# exchange it with the registry at publish time. panelist is already
+# bootstrapped as a Trusted Publisher, so no per-release secret is needed.
 
 on:
   push:
@@ -44,43 +41,24 @@ on:
         type: boolean
         default: true
 
-permissions:
-  contents: read
-  id-token: write
-
 jobs:
   release:
     name: Publish to public npm
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 20
-          registry-url: "https://registry.npmjs.org"
-
-      # Trusted publishing requires npm >= 11.5.1 — Node 20 ships npm 10.x,
-      # which signs provenance attestations but doesn't perform the
-      # OIDC↔registry token exchange. Pin to the npm 11 line: `npm@latest`
-      # is now npm 12, which dropped Node 20 (requires node >=22) and fails
-      # this step with EBADENGINE. npm 11.x still supports Node 20 and
-      # satisfies the >= 11.5.1 trusted-publishing floor. Mirrors
-      # tickle-stick's release.yml (confirmed working since its v0.4.1).
-      - name: Upgrade npm to support trusted publishing
-        run: |
-          npm install -g npm@11
-          npm --version
-
-      - name: Run tests (pre-publish gate)
-        run: node --test test/*.test.mjs
-
-      - name: Route this publish to public npm (not GitHub Packages)
-        run: npm pkg delete publishConfig.registry
-
-      - name: Publish (dry run)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
-        run: npm publish --dry-run --access public
-
-      - name: Publish (real)
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
-        run: npm publish --access public --provenance
+    # Permissions are NOT inherited into a called workflow — the caller job
+    # must grant them, or OIDC token minting + provenance attestation fail.
+    permissions:
+      contents: read
+      id-token: write
+    uses: Kromatic-Innovation/code-workspace-config/.github/workflows/npm-oidc-publish.yml@main
+    with:
+      # panelist has no build step and no runtime/dev dependencies, so skip
+      # both `npm run build` and `npm ci` — mirrors the inlined workflow,
+      # which ran neither. `strip-publish-config-registry` (default true)
+      # deletes package.json's `publishConfig.registry` (GitHub Packages) in
+      # CI so the release targets npmjs.org.
+      build: false
+      install: false
+      test-command: "node --test test/*.test.mjs"
+      # push (tag) → real publish; workflow_dispatch → dry run unless the
+      # dispatcher explicitly set dry_run: false.
+      dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
