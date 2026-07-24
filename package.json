@@ -1,6 +1,6 @@
 {
   "name": "panelist",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A synthetic persona panel that tells you where readers quit — not how much they'd like it. Cross-model by default, honest by construction that it's a pre-filter, not user research.",
   "license": "Apache-2.0",
   "homepage": "https://github.com/Kromatic-Innovation/panelist#readme",
