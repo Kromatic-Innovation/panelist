@@ -37,6 +37,14 @@ panelist is published to the public npm registry as the unscoped package
 Innovation; published to npm from the `trikro` account. No `.npmrc` changes
 required.
 
+> **Bring your own model client — required.** panelist bundles **no** live
+> model. You inject a provider adapter as `spawn`'s third argument
+> (`deps.client`); the **default client throws** rather than run without one, so
+> a panel can never silently run un-modelled. In production this wraps a provider
+> layer you supply (e.g. PromptFoo/LiteLLM). See
+> [the prerequisite below](#personas-identity-is-data-task-is-ephemeral) for the
+> adapter shape.
+
 ## Use cases
 
 - "Give me feedback on this."
