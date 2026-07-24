@@ -11,6 +11,41 @@ MINOR releases (`0.x.0`) may include breaking changes, and PATCH releases
 reaches `1.0.0`, standard semver discipline (breaking changes only on MAJOR)
 takes over.
 
+## [0.2.1] - 2026-07-24
+
+Release-pipeline verification patch. **No source, API, documentation, or
+behavioural changes** — the published tarball is byte-identical to `0.2.0`.
+The only commits since that tag touch `.github/workflows/`, `.gitignore`, and
+`package-lock.json`, none of which ship (`files` is `["src", "packs"]`, and
+README is unchanged).
+
+This release exists to exercise the npm **trusted-publishing** path end to end.
+Every prior CI publish attempt failed: the npm Trusted Publisher for this
+package had an `Environment name` of `main`, while `release.yml` declares no
+`environment:`, so the OIDC token carried no environment claim and the
+mismatch surfaced as an opaque `404 PUT` rather than an auth error. `0.2.0`
+itself was published manually as a result. With the Trusted Publisher
+corrected to a blank environment, this is the first release that can prove the
+automated path works — and a version bump is required because npm refuses to
+re-publish an existing version.
+
+### Changed
+
+- CI only, nothing shipped: adopted the canonical Internal Platform
+  `promote-main.yml`; committed `package-lock.json` so `npm ci` is reproducible;
+  gitignored the generated `.agents/` and `.codex/` directories; pinned the
+  release workflow to the `npm@11` line (npm ≥ 11.5.1 is the trusted-publishing
+  floor, and `npm@latest` is now 12, which drops Node 20).
+
+### Note
+
+The proposal to replace this repo's inline `release.yml` with a shared
+cross-repo reusable workflow was **withdrawn** (#59, PR #62): a public repo
+cannot call a reusable workflow hosted in a private one, so it could never
+execute. The shared-template goal moves to a sync-and-drift-check model
+(code-workspace-config#1559), leaving this repo's working inline workflow in
+place.
+
 ## [0.2.0] - 2026-07-21
 
 New MINOR release (pre-1.0 semantics — see above): the multi-turn **junction
