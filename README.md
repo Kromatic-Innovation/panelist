@@ -112,4 +112,4 @@ These are **examples**. Real, private persona rosters live in their owner's repo
 
 ## Status
 
-Early. Extracted from an internal persona-review engine. Apache-2.0.
+Early. Developed internally, then open sourced. Apache-2.0.
