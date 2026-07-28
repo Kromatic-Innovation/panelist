@@ -10,7 +10,11 @@
 ## Call shape
 
 ```js
-spawn(personaId, { mode, artifact, instruction, responseSchema, horizon, tools }, deps)
+spawn(
+  personaId,
+  { mode, artifact, instruction, responseSchema, horizon, tools },
+  deps,
+);
 ```
 
 - `personaId` — a registered persona identity (see `registerPersonas`).
@@ -96,10 +100,10 @@ panelist ships two ways to invoke a persona, and both consume the **same
 persona identity** (the register record: `caresAbout` / `rewards` / `punishes`
 / `quitsWhen`) and, for `spawn`, the **same wrapper contract** described here:
 
-| Plane | Entry point | Shape | Use for |
-|---|---|---|---|
+| Plane            | Entry point                              | Shape                                                                                                                   | Use for                                                                                                 |
+| ---------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | **Programmatic** | `score.mjs` (`score` / `scoreCandidate`) | High fan-out: every persona × every panelist in a cross-model panel, aggregated into axis scores and a keep/cut verdict | Ranking or gating many candidates against a fixed rubric — "score these 20 drafts, cut the bottom half" |
-| **Agentic** | `spawn.mjs` (`spawn`) | One persona, one turn, one wrapper | Ad hoc single-persona invocation at a call site — "would *this* persona stop reading here?" |
+| **Agentic**      | `spawn.mjs` (`spawn`)                    | One persona, one turn, one wrapper                                                                                      | Ad hoc single-persona invocation at a call site — "would _this_ persona stop reading here?"             |
 
 `score.mjs` is rubric-shaped: it takes a `rubric` (axes, kill axes, kill
 floor, cut threshold), runs the full persona × panelist matrix through
@@ -162,7 +166,10 @@ const result = await spawn(
 {
   "personaId": "drive-by-installer",
   "mode": "vote",
-  "verdict": { "pass": false, "frictionPoint": "install command buried after three paragraphs of philosophy" },
+  "verdict": {
+    "pass": false,
+    "frictionPoint": "install command buried after three paragraphs of philosophy"
+  },
   "message": "I bounce before I ever see `npm install`. Three paragraphs of mission statement before the how-to.",
   "dealKillers": ["no install command above the fold"]
 }
@@ -193,7 +200,11 @@ const result = await spawn(
 ```js
 const result = await spawn(
   "maintainers-maintainer",
-  { mode: "converse", artifact: prSummary, instruction: "React to this PR description." },
+  {
+    mode: "converse",
+    artifact: prSummary,
+    instruction: "React to this PR description.",
+  },
   { client },
 );
 ```
@@ -227,15 +238,21 @@ const result = await spawn(
 
 ## Forward-compat
 
-Two later slices build on this contract without changing the wrapper shape:
-
-- **panelist#4 — agentic converse plane.** `converse` (and possibly `comment`)
-  grows from one model call into a real multi-turn dialogue with subagents
-  and tool use — gated by the same `isolation` mechanism (panelist#72) rather
-  than a new one. The wrapper stays
-  `{ personaId, mode, verdict, message, dealKillers, isolation }` — what
-  changes is how many model/tool calls produce that final `message`, not the
-  shape returned.
+- **Multi-turn dialogue and tool use — shipped, not future.** This section
+  previously described multi-turn dialogue with subagents and tool use as
+  future work gated by isolation (panelist#4). That's stale: `junction.mjs`
+  (panelist#46/#47) already shipped a multi-turn model-calling path —
+  `runJunctionLoop`, a generic loop-runner that walks a persona through a
+  decision graph one junction at a time (see the
+  [junction contract](junction-contract.md)) — and panelist#75 gated it with
+  the same `isolation` mechanism (panelist#72) `spawn`/`score` use: deny by
+  default, `opts.tools`/`opts.toolGate` as the explicit opt-in, wildcards
+  throw, and every result carries `isolation: { tools, denied }` on every stop
+  path (bail, patience-budget exhaustion, terminal, invalid-decision). `spawn`
+  itself remains the single-turn contract this doc describes; `runJunctionLoop`
+  is the multi-turn generalization, not a variant of `spawn`'s wrapper — it
+  returns its own shape (`{ strategy, path, stopReason, trace, isolation, ... }`),
+  not `{ personaId, mode, verdict, message, dealKillers, isolation }`.
 - **panelist#6 — honesty-guardrail auto-stamp.** Per
   `synthetic-persona-best-practices.md` §6, every panel output should
   auto-stamp the "this is not user research" caveat by construction. Today
