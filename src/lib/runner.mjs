@@ -32,6 +32,7 @@ import { spawn, buildSpawnPrompt } from "./spawn.mjs";
  *   @param {string} [task.instruction]
  *   @param {object} [task.responseSchema]
  *   @param {string} [task.horizon]
+ *   @param {string[]} [task.tools]  explicit tool allowlist (panelist#72), forwarded to spawn.
  * @param {object} [deps]
  *   @param {function} [deps.buildPrompt]  override buildSpawnPrompt, same convention as spawn.
  * @returns {string} the rendered subagent prompt
@@ -46,6 +47,10 @@ export function renderRunnerPrompt(personaId, task = {}, deps = {}) {
   return build({ persona, mode, artifact, instruction, responseSchema, horizon });
 }
 
+// NOTE: task.tools (panelist#72) does not change the RENDERED PROMPT above —
+// tool isolation is enforced by spawn's gate (isolation.mjs), not by prompt
+// wording. renderRunnerPrompt stays prompt-text-only, same as before.
+
 /**
  * The generic agentic runner (D5): resolve a persona by id and run it for one
  * turn. This is the ONE runner that handles ANY registered persona — it
@@ -54,11 +59,12 @@ export function renderRunnerPrompt(personaId, task = {}, deps = {}) {
  * wrapper. No per-persona code lives here or anywhere else.
  *
  * @param {string} personaId
- * @param {object} task            same shape as spawn's opts: { mode, artifact, instruction?, responseSchema?, horizon? }
+ * @param {object} task            same shape as spawn's opts: { mode, artifact, instruction?, responseSchema?, horizon?, tools? }
  * @param {object} [deps]
  *   @param {{model,complete}} [deps.client]  injected model client (default throws, same as spawn).
+ *   @param {object} [deps.toolGate]          share a gate (isolation.mjs createToolGate) across a panel.
  *   @param {function} [deps.buildPrompt]     override buildSpawnPrompt.
- * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[] }>}
+ * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] } }>}
  */
 export async function runPersona(personaId, task = {}, deps = {}) {
   return spawn(personaId, task, deps);

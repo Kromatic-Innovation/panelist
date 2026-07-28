@@ -2,7 +2,7 @@ import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "../src/lib/spawn.mjs";
 import { registerPersonas, clearRegistry } from "../src/lib/register.mjs";
-import { fixedSpawn, mockClient } from "./_helpers.mjs";
+import { fixedSpawn, mockClient, toolAttemptingClient } from "./_helpers.mjs";
 import reviewPack from "../packs/review/index.mjs";
 
 const artifact = "# My Project\nInstall: `npm i my-project`";
@@ -20,7 +20,7 @@ test("vote with a responseSchema fills verdict and returns a well-formed wrapper
     dealKillers: [],
   });
   const out = await spawn("drive-by-installer", { mode: "vote", artifact, instruction: "Would you try it?", responseSchema: VOTE_SCHEMA }, { client });
-  assert.deepEqual(Object.keys(out).sort(), ["dealKillers", "message", "mode", "personaId", "verdict"]);
+  assert.deepEqual(Object.keys(out).sort(), ["dealKillers", "isolation", "message", "mode", "personaId", "verdict"]);
   assert.equal(out.personaId, "drive-by-installer");
   assert.equal(out.mode, "vote");
   assert.deepEqual(out.verdict, { decision: "approve" });
@@ -58,4 +58,42 @@ test("spawn rejects an unknown persona and a bad mode", async () => {
   const client = fixedSpawn("claude-x", { message: "hi", dealKillers: [] });
   await assert.rejects(() => spawn("no-such-persona", { mode: "comment", artifact }, { client }), /unknown persona/);
   await assert.rejects(() => spawn("drive-by-installer", { mode: "bogus", artifact }, { client }), /mode must be one of/);
+});
+
+// ── Tool isolation (panelist#72) ──────────────────────────────────────────
+
+test("default → denied: spawn grants no tools when opts.tools is omitted", async () => {
+  const client = fixedSpawn("claude-x", { message: "reacting", dealKillers: [] });
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.deepEqual(out.isolation, { tools: [], denied: [] });
+});
+
+test("explicit allowlist → permitted: opts.tools grants exactly the named tools", async () => {
+  const client = fixedSpawn("claude-x", { message: "reacting", dealKillers: [] });
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact, tools: ["recall"] }, { client });
+  assert.deepEqual(out.isolation, { tools: ["recall"], denied: [] });
+});
+
+test("a wildcard tool grant throws rather than silently opening everything", async () => {
+  const client = fixedSpawn("claude-x", { message: "reacting", dealKillers: [] });
+  await assert.rejects(
+    () => spawn("drive-by-installer", { mode: "comment", artifact, tools: "*" }, { client }),
+    /wildcard/,
+  );
+});
+
+test("an attempted-but-denied tool call surfaces in isolation.denied, not swallowed", async () => {
+  const client = toolAttemptingClient("claude-x", "recall", { message: "reacting", dealKillers: [] });
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.deepEqual(out.isolation.tools, []);
+  assert.equal(out.isolation.denied.length, 1);
+  assert.equal(out.isolation.denied[0].tool, "recall");
+  assert.equal(out.isolation.denied[0].reviewer, "drive-by-installer");
+  assert.match(out.isolation.denied[0].at, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("granting the attempted tool clears the denial (the same client, now permitted)", async () => {
+  const client = toolAttemptingClient("claude-x", "recall", { message: "reacting", dealKillers: [] });
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact, tools: ["recall"] }, { client });
+  assert.deepEqual(out.isolation, { tools: ["recall"], denied: [] });
 });

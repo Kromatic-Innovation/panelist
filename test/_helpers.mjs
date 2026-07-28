@@ -34,3 +34,28 @@ export function fixedScorer(model, scores) {
 export function fixedSpawn(model, payload) {
   return mockClient(model, () => JSON.stringify(payload));
 }
+
+/**
+ * A spawn client that ACTUALLY consults the `tools` allowlist it's called
+ * with (panelist#72): if `toolId` is in the granted set, it "calls" it (no-op
+ * here, just reflects success in the payload); if not, it reports the attempt
+ * via `res.deniedToolCalls` instead of silently proceeding — exercising the
+ * real gate contract rather than a hardcoded denial.
+ * @param {string} model
+ * @param {string} toolId  the tool this persona will always try to reach for
+ * @param {object} payload  the wrapper payload to emit (message/dealKillers/verdict)
+ */
+export function toolAttemptingClient(model, toolId, payload) {
+  return {
+    model,
+    async complete({ tools }) {
+      const granted = Array.isArray(tools) && tools.includes(toolId);
+      return {
+        ok: true,
+        text: JSON.stringify(payload),
+        model,
+        deniedToolCalls: granted ? [] : [toolId],
+      };
+    },
+  };
+}

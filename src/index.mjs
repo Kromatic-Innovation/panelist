@@ -14,7 +14,7 @@
 // formatPanelSummary leads with verdict/deal-killers (never a warmth score),
 // and drift-check gains a checkHonesty guardrail so CI can assert no summary
 // omits the caveat. A live PromptFoo/LiteLLM provider remains a later slice.
-export const PANELIST_VERSION = "0.2.0";
+export const PANELIST_VERSION = "0.3.0";
 
 // Registry — compose personas/rubrics at runtime.
 export {
@@ -95,3 +95,18 @@ export {
 // Honesty guardrails (panelist#6) — auto-stamp + assert the honesty caveat on
 // every panel output; formatPanelSummary leads with verdict/deal-killers.
 export { stampHonesty, formatPanelSummary, assertHonestyStamped, HONESTY_MARKER } from "./lib/honesty.mjs";
+
+// Tool isolation (panelist#72) — deny persona tools by default; the deny/allow
+// decision as an independently testable unit. spawn()/runPersona() build a
+// gate from this internally; these are exported for callers assembling a
+// multi-persona panel (e.g. sharing one gate, or unioning per-persona
+// isolation.tools into a panel-level record).
+export {
+  DISCOVERY_TOOLS,
+  resolveEffectiveTools,
+  isToolGranted,
+  recordDenial,
+  createToolGate,
+  buildIsolationEnvelope,
+  unionTools,
+} from "./lib/isolation.mjs";
