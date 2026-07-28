@@ -36,6 +36,16 @@ changes default behavior for existing callers of `spawn`/`runPersona`.
   `recordDenial`, `createToolGate`, `buildIsolationEnvelope`, `unionTools`) is
   the deny/allow decision as an independent, testable unit, exported from
   `src/index.mjs`.
+- **The multi-turn junction plane is now gated too (#75).** `runJunctionLoop`
+  reached the injected model client with no allowlist, no gate, and no
+  `isolation` field on its result — a hole in the same guarantee the rest of
+  this release ships, and the worst case for it (a persona holds ambient tool
+  access across every turn of a walk, with no envelope at all to inspect
+  afterward). `runJunctionLoop` now threads `opts.tools`/`opts.toolGate`
+  through the same `isolation.mjs` gate `spawn` uses, routes every per-turn
+  `client.complete()` call through it, and returns
+  `isolation: { tools, denied }` on every stop path — bail, patience-budget
+  exhaustion, terminal, and invalid-decision alike.
 - Documented the isolation guarantee in the README next to the honesty
   caveat — "a persona sees the artifact and nothing else" is now a structural
   claim, not an aspiration.

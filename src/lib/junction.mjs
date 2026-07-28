@@ -7,8 +7,8 @@
 // next, never let it see content it didn't choose" — so this builds ONE engine, not
 // two. jauss and the blog judge are just two graphs handed to the same runner.
 //
-//   runJunctionLoop(graph, persona, { horizon, spawnStrategy, client, patienceBudget })
-//     -> { strategy, entry, path, stopReason, turns, budgetRemaining, transcript }
+//   runJunctionLoop(graph, persona, { horizon, spawnStrategy, client, patienceBudget, tools, toolGate })
+//     -> { strategy, entry, path, stopReason, turns, budgetRemaining, transcript, isolation }
 //
 // GRAPH SHAPE
 //   {
@@ -46,10 +46,15 @@
 //   so the barrier logic lives in exactly one place and is never duplicated.
 //
 // THE MODEL CALL is the SAME injected-client contract spawn.mjs uses — deps/opts
-// `client: { model, complete: async ({prompt,maxTokens,temperature}) => {ok,text,model} }`.
+// `client: { model, complete: async ({prompt,maxTokens,temperature,tools}) => {ok,text,model} }`.
 // We do NOT hand-roll a second model-call path: like spawn, every turn is one
-// `client.complete({ prompt })`, and the reply is parsed with score.mjs's
-// extractJsonObject. (spawn() itself is single-turn and registry-bound, so it can
+// `client.complete({ prompt, tools })`, and the reply is parsed with score.mjs's
+// extractJsonObject. Isolation (panelist#72/#75) is gated the SAME way spawn.mjs
+// gates it: deny-by-default via `opts.tools`/`opts.toolGate` (isolation.mjs's
+// createToolGate), and the returned `isolation: { tools, denied }` envelope is
+// present on every stop path (bail, budget-exhaustion, terminal, invalid-decision) —
+// there is exactly one return statement in this loop, so no early-return path can
+// skip the envelope. (spawn() itself is single-turn and registry-bound, so it can
 // neither hold the "persistent" accumulating conversation nor render the junction
 // view; this runner is the multi-turn generalization of the same contract, not a
 // competing one. The generic reaction/decision schema + run-level trace aggregation
@@ -64,6 +69,7 @@
 
 import { renderPersona, extractJsonObject } from "./score.mjs";
 import { buildTrace, normalizeEngagement } from "./junction-schema.mjs";
+import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
 
 // Bail is always an available decision from every junction — the persona can quit
 // anywhere. Reserved id: a graph must not name a junction "bail".
@@ -84,6 +90,21 @@ function resolveContent(junction, state) {
 function renderPersonaBlock(persona) {
   if (persona == null) return "";
   return typeof persona === "string" ? persona : renderPersona(persona);
+}
+
+/** Attribution string for isolation.mjs denial records — a persona id, or "junction" for a raw string persona. */
+function reviewerFor(persona) {
+  if (persona && typeof persona === "object" && typeof persona.id === "string" && persona.id) return persona.id;
+  return "junction";
+}
+
+/** Normalize a client-reported denial entry (string tool id, or {tool, at}) into the locked shape. */
+function normalizeReportedDenial(entry, reviewer) {
+  if (typeof entry === "string") return recordDenial(entry, reviewer);
+  if (entry && typeof entry === "object" && typeof entry.tool === "string") {
+    return recordDenial(entry.tool, reviewer, entry.at);
+  }
+  return null;
 }
 
 /** The forward decisions from a junction PLUS the always-available bail option. */
@@ -195,6 +216,10 @@ function parseReply(text) {
  *   @param {{model,complete}} opts.client  injected model client (same shape as spawn's deps.client).
  *   @param {number|function} [opts.patienceBudget]  initial patience (number, or (state)=>number). Falls back to
  *                                                    graph.patience(horizon), then DEFAULT_PATIENCE.
+ *   @param {string[]} [opts.tools]  explicit tool allowlist (panelist#72/#75). Omit for none — runJunctionLoop
+ *     is fully isolated by default, same posture as spawn. No wildcards; see isolation.mjs.
+ *   @param {object} [opts.toolGate]  share a gate (isolation.mjs's createToolGate) across several calls
+ *     instead of runJunctionLoop building its own from opts.tools.
  * @param {object} [hooks]
  *   @param {(trace:object)=>any} [hooks.onComplete]  consumer verdict hook: invoked ONCE with the finished
  *                                                    generic trace (see junction-schema.mjs) so a consumer can
@@ -210,13 +235,14 @@ function parseReply(text) {
  *   transcript: {turn:number, junctionId:string, view:object, reaction:string, engagement:string, decision:string|null}[],
  *   trace: {entryJunction:string, junctionTrace:object[], dropOff:{stoppedAt:string, reason:string}},
  *   verdict: any,
+ *   isolation: { tools: string[], denied: object[] },
  * }>}
  */
 export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   if (!graph || typeof graph.junctions !== "object" || graph.junctions == null) {
     throw new Error("panelist junction: graph must be { junctions: {...}, entry }.");
   }
-  const { horizon, spawnStrategy = "persistent", client, patienceBudget } = opts;
+  const { horizon, spawnStrategy = "persistent", client, patienceBudget, tools, toolGate } = opts;
   const render = RENDERERS[spawnStrategy];
   if (!render) {
     throw new Error(`panelist junction: spawnStrategy must be one of ${Object.keys(RENDERERS).join("|")} (got ${JSON.stringify(spawnStrategy)})`);
@@ -229,6 +255,12 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   }
 
   const personaBlock = renderPersonaBlock(persona);
+
+  // Isolation (panelist#72/#75): deny by default, same posture as spawn.mjs. A
+  // caller may share one gate (opts.toolGate); otherwise runJunctionLoop builds
+  // its own from opts.tools, defaulting to [] when omitted.
+  const gate = toolGate || createToolGate({ tools, reviewer: reviewerFor(persona) });
+  const reportedDenied = [];
 
   // Seed the patience budget. Explicit opt wins; then a graph-supplied patience(horizon); then the default.
   const seed =
@@ -267,9 +299,17 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
     budget -= cost;
     turn += 1;
     const prompt = render({ personaBlock, horizon, history: transcript, view });
-    const res = await client.complete({ prompt, maxTokens: 1024, temperature: 0 });
+    const res = await client.complete({ prompt, maxTokens: 1024, temperature: 0, tools: gate.tools });
     if (!res || res.ok !== true || typeof res.text !== "string") {
       throw new Error(`panelist junction: client returned no usable text at junction ${JSON.stringify(current)}.`);
+    }
+    // Merge the gate's own denials (recorded by gate.check() calls, if the adapter
+    // used it) with any the adapter self-reports via res.deniedToolCalls — an
+    // adapter that enforces upstream of panelist still gets denials surfaced.
+    const reported = Array.isArray(res.deniedToolCalls) ? res.deniedToolCalls : [];
+    for (const entry of reported) {
+      const denial = normalizeReportedDenial(entry, reviewerFor(persona));
+      if (denial) reportedDenied.push(denial);
     }
     const { reaction, engagement: rawEngagement, decision } = parseReply(res.text);
     // Normalize the persona-reported engagement to the generic 3-state now (idempotent
@@ -307,7 +347,12 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
     current = decision;
   }
 
-  const result = { strategy: spawnStrategy, entry: graph.entry, path, stopReason, turns: turn, budgetRemaining: budget, transcript };
+  // Isolation envelope (panelist#72/#75): present on EVERY stop path (bail,
+  // budget-exhaustion, terminal, invalid-decision) because there is exactly one
+  // return statement in this loop — no early-return path can skip it.
+  const isolation = buildIsolationEnvelope(gate.tools, [...gate.denied, ...reportedDenied]);
+
+  const result = { strategy: spawnStrategy, entry: graph.entry, path, stopReason, turns: turn, budgetRemaining: budget, transcript, isolation };
 
   // The generic run-level trace (mechanics only). A consumer's onComplete hook may
   // read it to compute its own interpretation; the engine bundles no default hook.

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runJunctionLoop, BAIL } from "../src/lib/junction.mjs";
+import { createToolGate } from "../src/lib/isolation.mjs";
 
 // A scripted persona client: captures every prompt it is handed, and answers with
 // a turn-ordered sequence of { reaction, decision } payloads (the loop is strictly
@@ -223,4 +224,100 @@ test("input validation: bad strategy, missing client, unknown entry all throw", 
     () => runJunctionLoop({ ...hubGraph(), entry: "nope" }, READER, { spawnStrategy: "persistent", client }),
     /entry .* is not a junction/,
   );
+});
+
+// ── Tool isolation (panelist#75) ─────────────────────────────────────────────
+
+/** A client that CONSULTS the granted tools array: attempts "recall" every turn,
+ * reporting it as denied via deniedToolCalls whenever it is not in `tools`. */
+function toolAttemptingClient(responses) {
+  let i = 0;
+  return {
+    model: "scripted-tool-attempting",
+    async complete({ tools }) {
+      const r = responses[i] ?? { reaction: "(exhausted script)", decision: BAIL };
+      i += 1;
+      const granted = Array.isArray(tools) && tools.includes("recall");
+      const deniedToolCalls = granted ? [] : ["recall"];
+      return { ok: true, text: JSON.stringify(r), model: "scripted-tool-attempting", deniedToolCalls };
+    },
+  };
+}
+
+test("default (no opts.tools) denies an attempted tool and surfaces it in isolation.denied", async () => {
+  const client = toolAttemptingClient([{ reaction: "seen enough", decision: BAIL }]);
+  const out = await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client });
+  assert.deepEqual(out.isolation.tools, []);
+  assert.equal(out.isolation.denied.length, 1);
+  assert.equal(out.isolation.denied[0].tool, "recall");
+  assert.match(out.isolation.denied[0].at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+});
+
+test("explicit opts.tools allowlist permits the granted tool (no denial recorded)", async () => {
+  const client = toolAttemptingClient([{ reaction: "seen enough", decision: BAIL }]);
+  const out = await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client, tools: ["recall"] });
+  assert.deepEqual(out.isolation.tools, ["recall"]);
+  assert.deepEqual(out.isolation.denied, []);
+});
+
+test("opts.tools wildcard throws via resolveEffectiveTools", async () => {
+  const client = scriptedClient([{ reaction: "go", decision: BAIL }], []);
+  await assert.rejects(
+    () => runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client, tools: "*" }),
+    /wildcard/,
+  );
+  await assert.rejects(
+    () => runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client, tools: ["recall", "*"] }),
+    /wildcard/,
+  );
+});
+
+test("opts.toolGate lets a caller share one gate (and its denied log) across calls", async () => {
+  const gate = createToolGate({ tools: ["recall"], reviewer: "shared" });
+  const client = toolAttemptingClient([{ reaction: "seen enough", decision: BAIL }]);
+  const out = await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client, toolGate: gate });
+  assert.deepEqual(out.isolation.tools, ["recall"]);
+  assert.deepEqual(out.isolation.denied, []);
+});
+
+test("isolation is present on every early-return/bail path: bail, budget-exhausted, terminal, invalid-decision", async () => {
+  // bail
+  {
+    const client = toolAttemptingClient([{ reaction: "no thanks", decision: BAIL }]);
+    const out = await runJunctionLoop(hubGraph(), READER, { spawnStrategy: "persistent", client });
+    assert.equal(out.stopReason, "bail");
+    assert.deepEqual(out.isolation.tools, []);
+    assert.equal(out.isolation.denied.length, 1);
+  }
+  // budget-exhausted
+  {
+    const client = toolAttemptingClient([
+      { reaction: "1", decision: "spokeA" },
+      { reaction: "2", decision: "hub" },
+      { reaction: "3", decision: "spokeA" },
+    ]);
+    const out = await runJunctionLoop(hubGraph(), READER, { spawnStrategy: "persistent", client, patienceBudget: 2 });
+    assert.equal(out.stopReason, "budget-exhausted");
+    assert.deepEqual(out.isolation.tools, []);
+    assert.ok(out.isolation.denied.length >= 1);
+  }
+  // terminal
+  {
+    const client = toolAttemptingClient([
+      { reaction: "hooked", decision: "intro" },
+      { reaction: "still reading", decision: "body" },
+    ]);
+    const out = await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client });
+    assert.equal(out.stopReason, "terminal");
+    assert.deepEqual(out.isolation.tools, []);
+    assert.ok(out.isolation.denied.length >= 1);
+  }
+  // invalid-decision
+  {
+    const client = toolAttemptingClient([{ reaction: "go", decision: "no-such-junction" }]);
+    const out = await runJunctionLoop(hubGraph(), READER, { spawnStrategy: "persistent", client });
+    assert.equal(out.stopReason, "invalid-decision");
+    assert.deepEqual(out.isolation.tools, []);
+    assert.equal(out.isolation.denied.length, 1);
+  }
 });

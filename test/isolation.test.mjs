@@ -39,6 +39,19 @@ test("resolveEffectiveTools: throws on malformed tool ids", () => {
   assert.throws(() => resolveEffectiveTools("web"), /must be an array/);
 });
 
+test("resolveEffectiveTools: throws on a wildcard nested anywhere in the array, not just as the sole entry", () => {
+  assert.throws(() => resolveEffectiveTools(["*"]), /wildcard/);
+  assert.throws(() => resolveEffectiveTools(["web", "recall", "*"]), /wildcard/);
+});
+
+test("resolveEffectiveTools: throws on non-array object grant shapes (not just booleans/strings)", () => {
+  assert.throws(() => resolveEffectiveTools({}), /must be an array/);
+  assert.throws(() => resolveEffectiveTools({ tools: ["web"] }), /must be an array/);
+  assert.throws(() => resolveEffectiveTools(new Proxy({}, {})), /must be an array/);
+  assert.throws(() => resolveEffectiveTools(Symbol("all")), /must be an array/);
+  assert.throws(() => resolveEffectiveTools(42), /must be an array/);
+});
+
 // ── isToolGranted / closed under discovery ───────────────────────────────────
 
 test("isToolGranted: exact match only", () => {
