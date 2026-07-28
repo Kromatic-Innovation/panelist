@@ -6,23 +6,26 @@
 
 ![panelist: three panelists reading a draft with exit-doors above their heads, a moderator directing the session](docs/assets/hero.png)
 
-**Use case:** you have a draft — marketing copy, a landing page, a pitch, a chapter — and want a fast, cheap read on where a real reader would bail, before you spend a human's attention on it.
+**What panelist is:** Synthetic user panels for any artifact, run across multiple model providers to correct for self-preference bias. Most tools of this kind return a warmth score, which invites "the AI loved it" misuse. Panelist models behavior instead: the exact point a persona quits, dismisses, or refuses to click like.
 
-**Differentiator:** most synthetic-panel tools return a warmth/viability score, which invites "the AI loved it" misuse. panelist's primary output is a **deal-killer / cut-list**: the exact point a persona would quit, dismiss, or refuse to forward — abandonment is behavioral and far more reliably simulable than affect. Panels are cross-model by default (fighting same-model self-preference bias), personas differ by *what makes them quit* rather than demographics, and every output auto-stamps the honesty caveat that this is a pre-filter, not user research.
+**Differentiator:** panelist's primary output is a **deal-killer / cut-list**: the exact point a persona would quit, dismiss, refuse to click, or refuse to forward — abandonment is behavioral and far more reliably simulable than affect. Panels are cross-model by default (fighting same-model self-preference bias), personas differ by _what makes them quit_ rather than demographics, and every output auto-stamps the honesty caveat that this is a pre-filter, not user research.
 
-**Why:** a 9/10 score from a model that wants to please you is worthless as a filter. A specific line where three independent, cross-model personas all bail is an actionable signal — that's the difference panelist is built around.
+**Why:** a 9/10 score from a model that wants to please you is worthless as a filter. A specific point where three independent, cross-model personas all disengage is an actionable signal — that's the difference panelist is built around.
 
-> ⚠️ **What panelist is and is not for.** A synthetic persona is a *model* of a customer, and your model of the customer is wrong — that is why you talk to real people. panelist is legitimate as a **drafting aid**, a **cheap pre-filter** to kill obviously-weak drafts before spending a human's attention, and a way to catch obvious misses. It is **not** evidence about real readers, **not** a substitute for talking to them, and **not** validation. "Our personas responded well to this" is a sentence this tool is designed to make hard to write.
+> ⚠️ **What panelist is and is not for.** A synthetic persona is a _model_ of a customer, and your model of the customer is wrong — that is why you talk to real people. panelist is legitimate as a **drafting aid**, a **cheap pre-filter** to kill obviously-weak drafts before spending a human's attention, and a way to catch obvious misses. It is **not** evidence about real readers, **not** a substitute for talking to them, and **not** validation. "Our personas responded well to this" is a sentence this tool is designed to make hard to write.
+
+> **Persona isolation, by construction (panelist#72).** "A persona sees the artifact and nothing else" is a structural claim, not an aspiration: `spawn`/`runPersona` grant a persona **no tools** by default — no MCP server, no web search, no filesystem search — and wildcard/"grant everything" opt-ins are rejected outright, so a tool-discovery capability can never be smuggled in by granting some other tool. Every response reports the effective granted set (`isolation.tools`) and any attempted-but-denied call (`isolation.denied`), so a contaminated run is visible instead of indistinguishable from a clean one. See ["Tool isolation"](docs/invocation-contract.md#tool-isolation-panelist72).
 
 ## Why it's different
 
-Most tools that spawn personas emit a warmth/viability *score* — the exact output that invites "look, the AI loves it" misuse. panelist's primary output is a **deal-killer / cut-list**: *where would this reader stop, dismiss, or refuse to forward?* Abandonment is behavioural and far more robustly simulable than affect.
+Most tools that spawn personas emit a warmth/viability _score_ — the exact output that invites "look, the AI loves it" misuse. panelist's primary output is a **deal-killer / cut-list**: _where would this persona stop, dismiss, or refuse to click, forward, or buy?_ Abandonment is behavioural and far more robustly simulable than affect.
 
 - **Deal-killers, not scores.** The default verdict is a cut-list, not a rating.
 - **Cross-model panels.** ≥2 providers by default (designed to wrap a provider layer you supply, e.g. PromptFoo/LiteLLM — not hand-rolled) to counter same-model self-preference / sycophancy bias.
-- **Diversity by kill-condition.** Personas differ by *what makes them quit*, not by demographics. Identity is behavioural (`rewards` / `punishes` / `quitsWhen`), never age/employer/tenure.
+- **Diversity by kill-condition.** Personas differ by _what makes them quit_, not by demographics. Identity is behavioural (`rewards` / `punishes` / `quitsWhen`), never age/employer/tenure.
 - **Honesty by construction.** Every panel output auto-stamps the caveat above.
-- **Calibration hooks.** Join synthetic verdicts to real downstream signal and rank personas by how well they *predict*, not how well they *read*.
+- **Isolated by construction.** No tool is reachable unless explicitly granted — see above.
+- **Calibration hooks.** Join synthetic verdicts to real downstream signal and rank personas by how well they _predict_, not how well they _read_.
 
 See [`docs/synthetic-persona-best-practices.md`](docs/synthetic-persona-best-practices.md) for the governing rules behind these design choices (specificity over decoration, demographics vs. behaviour, anti-sycophancy, panel diversity, calibration, and the honesty line).
 
@@ -47,10 +50,21 @@ required.
 
 ## Use cases
 
-- "Give me feedback on this."
-- "Would you click on this tweet?"
-- "Given this paragraph, will you read the next one?"
-- Resume review, book-chapter reader panels, blog-post pre-filters, OSS-README review.
+panelist models a synthetic _user_ reacting to any artifact — not just prose.
+Reading is one behavior among several; quitting, dismissing, refusing to
+forward, refusing to click, and refusing to buy are all in scope:
+
+- **Copy and long-form:** "Given this paragraph, will you read the next one?" — resume review, book-chapter reader panels, blog-post pre-filters.
+- **Interface and flow:** "Where in this onboarding would you give up?"
+- **Commercial:** "Would you pay for this? At what point do you stop believing the pricing page?"
+- **Developer-facing:** "Would you install this? Where does the README lose you?" — OSS-README review.
+- **Decision review:** "Given this plan, what would make you walk away?"
+
+The shipped [`packs/business`](#persona-packs-toggleable) pack — a B2C
+consumer and a B2B buyer — exists for the commercial use cases above; it is
+as central to panelist as [`packs/review`](#persona-packs-toggleable)'s
+OSS-code-review archetypes, not an afterthought bolted onto a prose-review
+tool.
 
 ### Multi-turn junction walks
 
@@ -85,7 +99,11 @@ const client = {
   model: "your-model",
   async complete({ prompt }) {
     // call your provider with `prompt`, return its raw text
-    return { ok: true, text: '{ "verdict": "keep", "note": "stub" }', model: "your-model" };
+    return {
+      ok: true,
+      text: '{ "verdict": "keep", "note": "stub" }',
+      model: "your-model",
+    };
   },
 };
 

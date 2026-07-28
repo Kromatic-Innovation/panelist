@@ -1,7 +1,7 @@
 {
   "name": "panelist",
-  "version": "0.2.1",
-  "description": "A synthetic persona panel that tells you where readers quit — not how much they'd like it. Cross-model by default, honest by construction that it's a pre-filter, not user research.",
+  "version": "0.3.0",
+  "description": "Synthetic user panels for any artifact, run across multiple model providers to correct for self-preference bias — models the exact point a persona quits, dismisses, or refuses to click, not a warmth score.",
   "license": "Apache-2.0",
   "homepage": "https://github.com/Kromatic-Innovation/panelist#readme",
   "bugs": {
@@ -23,7 +23,10 @@
     "./packs/review": "./packs/review/index.mjs",
     "./packs/business": "./packs/business/index.mjs"
   },
-  "files": ["src", "packs"],
+  "files": [
+    "src",
+    "packs"
+  ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "drift": "node src/lib/drift-check.mjs"
@@ -35,5 +38,7 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

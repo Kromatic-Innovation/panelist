@@ -10,7 +10,7 @@
 ## Call shape
 
 ```js
-spawn(personaId, { mode, artifact, instruction, responseSchema, horizon }, deps)
+spawn(personaId, { mode, artifact, instruction, responseSchema, horizon, tools }, deps)
 ```
 
 - `personaId` — a registered persona identity (see `registerPersonas`).
@@ -21,20 +21,54 @@ spawn(personaId, { mode, artifact, instruction, responseSchema, horizon }, deps)
 - `responseSchema` — optional. Its presence, not the mode, is what turns
   `verdict` on.
 - `horizon` — optional time-horizon framing passed through to the prompt.
+- `tools` — optional explicit tool allowlist (panelist#72). **Omit for full
+  isolation** — `spawn` grants no tools by default. See
+  ["Tool isolation"](#tool-isolation-panelist72) below.
 - `deps.client` — injected model adapter (`{ model, complete }`). No live
   provider is bundled; the default throws.
+- `deps.toolGate` — optional: share one `isolation.mjs` `createToolGate()`
+  gate (and its denied log) across several `spawn` calls in one panel, instead
+  of each call building its own from `opts.tools`.
 
 ## Response wrapper
 
 Every call, in every mode, returns exactly this shape:
 
 ```js
-{ personaId, mode, verdict: object | null, message: string, dealKillers: string[] }
+{ personaId, mode, verdict: object | null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] } }
 ```
 
 There is one wrapper, not one-per-mode. `spawn.mjs` builds it the same way
 regardless of `mode` — mode only changes the instruction text handed to the
 model and whether the prompt asks for a `verdict` field at all.
+
+## Tool isolation (panelist#72)
+
+A persona's isolation from ambient tools (an MCP memory server, web search,
+filesystem search) is enforced by construction, not by prompt instruction
+alone:
+
+- **Deny by default.** `spawn`/`runPersona` grant **no tools** unless
+  `opts.tools` names them explicitly, e.g. `{ tools: ["web"] }`.
+- **No wildcards.** `opts.tools: "*"` (or `true`, or `"all"`/`"any"`) throws
+  rather than silently granting everything. This is what keeps isolation
+  **closed under discovery**: a tool-discovery/tool-search capability is
+  itself a tool, and can only be granted by naming it explicitly like any
+  other — never bundled in via a wildcard.
+- **The effective set is always reported.** `isolation.tools` in the returned
+  envelope is the exact granted allowlist (`[]` means fully isolated).
+- **Denied attempts are reported, not swallowed.** If the injected adapter
+  consults the gate (`deps.toolGate`, or the one `spawn` builds internally)
+  before dispatching a tool call, or self-reports via
+  `res.deniedToolCalls`, every attempted-but-denied call shows up in
+  `isolation.denied` as `{ tool, reviewer, at }`.
+- **Assembling a panel.** If tool sets differ per persona across several
+  `spawn` calls, `isolation.mjs`'s `unionTools([...results])` gives the
+  panel-level union; each per-call result still carries its own
+  `isolation.tools`.
+
+See [`src/lib/isolation.mjs`](../src/lib/isolation.mjs) for the deny/allow
+decision as an independently testable unit.
 
 ## Mode semantics
 
@@ -104,6 +138,10 @@ this module; validating "does this JSON match my schema" is the caller's
 job, not the invocation contract's.
 
 ## Worked examples
+
+> The JSON responses below omit `isolation` for brevity — in practice every
+> response also carries `"isolation": { "tools": [], "denied": [] }` (or
+> whatever was granted/denied). See ["Tool isolation"](#tool-isolation-panelist72) above.
 
 ### `vote`, with a schema (verdict filled)
 
@@ -180,9 +218,12 @@ const result = await spawn(
 - `dealKillers` is **always** an array (possibly empty), in every mode. A
   persona may surface a blocking objection whether it's voting, commenting,
   or conversing.
-- The wrapper shape (`personaId`, `mode`, `verdict`, `message`, `dealKillers`)
-  never changes across modes or across whether a schema was supplied — only
-  the values inside it do.
+- The wrapper shape (`personaId`, `mode`, `verdict`, `message`, `dealKillers`,
+  `isolation`) never changes across modes or across whether a schema was
+  supplied — only the values inside it do.
+- `isolation.tools` is **always** the exact effective allowlist (`[]` by
+  default); `isolation.denied` is **always** an array (possibly empty) of
+  attempted-but-denied tool calls. See ["Tool isolation"](#tool-isolation-panelist72).
 
 ## Forward-compat
 
@@ -190,9 +231,11 @@ Two later slices build on this contract without changing the wrapper shape:
 
 - **panelist#4 — agentic converse plane.** `converse` (and possibly `comment`)
   grows from one model call into a real multi-turn dialogue with subagents
-  and tool use. The wrapper stays
-  `{ personaId, mode, verdict, message, dealKillers }` — what changes is how
-  many model calls produce that final `message`, not the shape returned.
+  and tool use — gated by the same `isolation` mechanism (panelist#72) rather
+  than a new one. The wrapper stays
+  `{ personaId, mode, verdict, message, dealKillers, isolation }` — what
+  changes is how many model/tool calls produce that final `message`, not the
+  shape returned.
 - **panelist#6 — honesty-guardrail auto-stamp.** Per
   `synthetic-persona-best-practices.md` §6, every panel output should
   auto-stamp the "this is not user research" caveat by construction. Today
