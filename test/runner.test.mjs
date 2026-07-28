@@ -90,3 +90,17 @@ test("runPersona rejects an unknown persona (delegated to spawn)", async () => {
     /unknown persona/,
   );
 });
+
+test("runPersona isolation (panelist#72): defaults to no tools, honors an explicit allowlist (delegated to spawn)", async () => {
+  const client = fixedSpawn("claude-x", { message: "reacting", dealKillers: [] });
+
+  const defaultOut = await runPersona("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.deepEqual(defaultOut.isolation, { tools: [], denied: [] });
+
+  const grantedOut = await runPersona(
+    "drive-by-installer",
+    { mode: "comment", artifact, tools: ["recall"] },
+    { client },
+  );
+  assert.deepEqual(grantedOut.isolation, { tools: ["recall"], denied: [] });
+});

@@ -33,6 +33,7 @@
 // ── Rubric normalization ────────────────────────────────────────────────────
 
 import { USAGE_HEADER } from "./schema.mjs";
+import { buildIsolationEnvelope, resolveEffectiveTools } from "./isolation.mjs";
 
 const DEFAULT_AXES = ["resonance", "clarity", "credibility", "scrollStop"];
 const DEFAULT_CUT_THRESHOLD = 5.0;
@@ -334,6 +335,13 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     crossModel: spansMultipleProviders(Object.keys(byModel)),
     panelistsFailed,
     honesty: USAGE_HEADER,
+    // score.mjs's programmatic plane never grants a persona a tool (deps.panel
+    // clients are plain text-completion adapters, not agentic subagents) —
+    // isolation.tools defaults to []. deps.tools lets a caller declare an
+    // explicit grant if their panel wraps an agentic/tool-capable adapter.
+    // Routed through resolveEffectiveTools so a wildcard grant throws here
+    // too, same as spawn — it must not silently collapse to [].
+    isolation: buildIsolationEnvelope(resolveEffectiveTools(deps.tools), []),
   };
 }
 
@@ -389,6 +397,7 @@ function neutralFallback(candidate, panelistsFailed, rubric) {
     panelistsFailed,
     fallback: true,
     honesty: USAGE_HEADER,
+    isolation: buildIsolationEnvelope([], []),
   };
 }
 

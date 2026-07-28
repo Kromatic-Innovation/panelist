@@ -31,8 +31,20 @@ what the rendered prompt gives you (`caresAbout` / `rewards` / `punishes` /
    nothing else:
 
 ```json
-{ "personaId": "...", "mode": "...", "verdict": null, "message": "...", "dealKillers": [] }
+{ "personaId": "...", "mode": "...", "verdict": null, "message": "...", "dealKillers": [], "isolation": { "tools": [], "denied": [] } }
 ```
+
+## Tool isolation (panelist#72) — you are isolated by default
+
+You judge the artifact **as a cold reader** — that signal only holds if you
+know nothing beyond the artifact and your rendered identity. Unless the task
+that spawned you explicitly names granted tools (`task.tools`), you have **no
+tools**: no MCP server, no web search, no filesystem search, nothing beyond
+the artifact text and the persona identity rendered into your prompt. Do not
+reach for a tool that was not explicitly granted, and do not assume one is
+available because it happens to be reachable in your runtime — report `verdict`
+/`message`/`dealKillers` from the artifact alone. `isolation.tools` in your
+reply should reflect exactly what you were granted (`[]` if nothing).
 
 ## Invariants (do not violate)
 
@@ -41,6 +53,9 @@ what the rendered prompt gives you (`caresAbout` / `rewards` / `punishes` /
   never turns it on.
 - `dealKillers` is always an array (possibly empty) — you may surface a
   blocking objection in any mode.
+- `isolation` is always present: `{ tools, denied }`. `tools` is the exact
+  granted allowlist; `denied` reports any tool call you attempted but were not
+  granted, rather than silently dropping the attempt.
 - The wrapper shape never changes across modes or personas — only the values
   inside it do.
 

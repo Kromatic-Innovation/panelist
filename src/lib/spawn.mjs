@@ -1,7 +1,7 @@
 // spawn.mjs — the persona invocation contract (#1263 slice E).
 //
-//   spawn(personaId, { mode, artifact, instruction, responseSchema?, horizon? }, deps)
-//     -> { personaId, mode, verdict|null, message, dealKillers[] }
+//   spawn(personaId, { mode, artifact, instruction, responseSchema?, horizon?, tools? }, deps)
+//     -> { personaId, mode, verdict|null, message, dealKillers[], isolation }
 //
 // One persona, one turn, one wrapper. This is the FOUNDATIONAL single-turn
 // contract; the richer agentic/converse plane (multi-turn dialogue, tool use) is
@@ -18,13 +18,23 @@
 //   - `dealKillers` is ALWAYS an array (possibly empty) — a persona may always
 //     surface blocking objections regardless of mode. (Full honesty-guardrail
 //     auto-stamping is panelist#6; this just keeps the wrapper caveat-capable.)
+//   - `isolation`   is ALWAYS present (panelist#72): { tools, denied }. `tools`
+//     defaults to `[]` — spawn grants NO tools unless opts.tools names them
+//     explicitly (see isolation.mjs; wildcard grants throw). `denied` reports
+//     attempted-but-denied tool calls rather than swallowing them.
 //
 // The model client is INJECTED (deps.client), the same adapter shape score.mjs
-// uses: { model, complete: async ({prompt, maxTokens, temperature}) =>
-// { ok, text, model } }. No live provider is bundled; the default throws.
+// uses: { model, complete: async ({prompt, maxTokens, temperature, tools}) =>
+// { ok, text, model, deniedToolCalls? } }. No live provider is bundled; the
+// default throws. An adapter that actually dispatches tool calls is expected to
+// consult the injected gate (deps.toolGate, or build one itself against the
+// same `tools` allowlist) before calling one, and MAY additionally report
+// attempted-but-denied calls back via `res.deniedToolCalls` (array of tool id
+// strings, or `{ tool, at }` objects) — spawn merges those into `isolation.denied`.
 
 import { getPersona } from "./register.mjs";
 import { renderPersona, extractJsonObject } from "./score.mjs";
+import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
 
 const MODES = new Set(["vote", "comment", "converse"]);
 
@@ -104,6 +114,15 @@ function normalizeDealKillers(v) {
   return v.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim());
 }
 
+/** Normalize a client-reported denial entry (string tool id, or {tool, at}) into the locked shape. */
+function normalizeReportedDenial(entry, reviewer) {
+  if (typeof entry === "string") return recordDenial(entry, reviewer);
+  if (entry && typeof entry === "object" && typeof entry.tool === "string") {
+    return recordDenial(entry.tool, reviewer, entry.at);
+  }
+  return null;
+}
+
 /**
  * Invoke one persona for a single turn.
  *
@@ -114,13 +133,17 @@ function normalizeDealKillers(v) {
  *   @param {string} [opts.instruction]
  *   @param {object} [opts.responseSchema]  when present, `verdict` is filled.
  *   @param {string} [opts.horizon]
+ *   @param {string[]} [opts.tools]  explicit tool allowlist (panelist#72). Omit for none —
+ *     spawn is fully isolated by default. No wildcards; see isolation.mjs.
  * @param {object} [deps]
  *   @param {{model,complete}} [deps.client]  injected model client (default throws).
  *   @param {function} [deps.buildPrompt]     override buildSpawnPrompt.
- * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[] }>}
+ *   @param {object} [deps.toolGate]          share a gate (createToolGate) across a multi-persona panel
+ *     instead of spawn building its own from opts.tools.
+ * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] } }>}
  */
 export async function spawn(personaId, opts = {}, deps = {}) {
-  const { mode, artifact, instruction, responseSchema, horizon } = opts;
+  const { mode, artifact, instruction, responseSchema, horizon, tools } = opts;
   if (!MODES.has(mode)) {
     throw new Error(`panelist spawn: mode must be one of ${[...MODES].join("|")} (got ${JSON.stringify(mode)})`);
   }
@@ -133,7 +156,12 @@ export async function spawn(personaId, opts = {}, deps = {}) {
   const build = deps.buildPrompt || buildSpawnPrompt;
   const prompt = build({ persona, mode, artifact, instruction, responseSchema, horizon });
 
-  const res = await client.complete({ prompt, maxTokens: 1024, temperature: 0 });
+  // Isolation (panelist#72): deny by default. A caller may share one gate
+  // across a panel (deps.toolGate); otherwise spawn builds its own from
+  // opts.tools, defaulting to [] when omitted.
+  const gate = deps.toolGate || createToolGate({ tools, reviewer: personaId });
+
+  const res = await client.complete({ prompt, maxTokens: 1024, temperature: 0, tools: gate.tools });
   if (!res || res.ok !== true || typeof res.text !== "string") {
     throw new Error(`panelist spawn: client returned no usable text for ${JSON.stringify(personaId)}`);
   }
@@ -144,5 +172,12 @@ export async function spawn(personaId, opts = {}, deps = {}) {
   const verdict = responseSchema != null && "verdict" in parsed ? parsed.verdict : null;
   const dealKillers = normalizeDealKillers(parsed.dealKillers);
 
-  return { personaId, mode, verdict, message, dealKillers };
+  // Merge the gate's own denials (recorded by gate.check() calls, if the
+  // adapter used it) with any the adapter self-reports via res.deniedToolCalls
+  // — an adapter that enforces upstream of panelist still gets denials surfaced.
+  const reported = Array.isArray(res.deniedToolCalls) ? res.deniedToolCalls : [];
+  const denied = [...gate.denied, ...reported.map((entry) => normalizeReportedDenial(entry, personaId)).filter(Boolean)];
+  const isolation = buildIsolationEnvelope(gate.tools, denied);
+
+  return { personaId, mode, verdict, message, dealKillers, isolation };
 }

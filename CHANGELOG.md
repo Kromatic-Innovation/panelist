@@ -11,6 +11,42 @@ MINOR releases (`0.x.0`) may include breaking changes, and PATCH releases
 reaches `1.0.0`, standard semver discipline (breaking changes only on MAJOR)
 takes over.
 
+## [0.3.0] - 2026-07-28
+
+**Breaking.** Bumped as a MINOR under pre-1.0 semantics (see above) because it
+changes default behavior for existing callers of `spawn`/`runPersona`.
+
+### Changed
+
+- **Persona tool isolation is now deny-by-default (#72).** Previously, a
+  persona's isolation from ambient tools (an MCP memory server, web search,
+  filesystem search) was enforced by prompt instruction only — if the host
+  running `spawn`/`runPersona` granted tools, nothing in panelist's output
+  revealed it, and a contaminated verdict looked identical to a clean one.
+  `spawn(personaId, opts, deps)` and `runPersona` now grant **no tools** by
+  default; callers opt in explicitly via `opts.tools: [...]` (or a shared
+  `deps.toolGate`). Wildcard/"grant everything" values throw, so a
+  tool-discovery/tool-search capability can never be implicitly reopened by
+  granting some other tool — isolation is closed under discovery.
+- **New `isolation` field on every `spawn`/`runPersona`/`score`/`scoreCandidate`
+  envelope:** `{ tools: string[], denied: { tool, reviewer, at }[] }`.
+  `tools` is the effective granted set (`[]` = fully isolated); `denied`
+  reports attempted-but-denied tool calls rather than swallowing them. New
+  module `src/lib/isolation.mjs` (`resolveEffectiveTools`, `isToolGranted`,
+  `recordDenial`, `createToolGate`, `buildIsolationEnvelope`, `unionTools`) is
+  the deny/allow decision as an independent, testable unit, exported from
+  `src/index.mjs`.
+- Documented the isolation guarantee in the README next to the honesty
+  caveat — "a persona sees the artifact and nothing else" is now a structural
+  claim, not an aspiration.
+- README broadened from a readers-and-drafts framing to synthetic users of
+  any artifact (#73): the opening use-case paragraph, the use-cases list (now
+  spanning copy, interface/flow, commercial, developer-facing, and decision
+  review), and the `business` pack's motivation no longer read as prose-only.
+  The honesty caveat itself is unchanged. `package.json`'s `description` and
+  the repository "About" blurb were updated to match, so registry/GitHub copy
+  doesn't re-seed the narrow framing.
+
 ## [0.2.1] - 2026-07-24
 
 Release-pipeline verification patch. **No source, API, documentation, or

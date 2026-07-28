@@ -69,3 +69,22 @@ test("decideVerdict cuts on low overall and on kill-axis floor", () => {
   assert.equal(decideVerdict({ overall: 7, clarity: 3.5, credibility: 9 }, RUBRIC), "cut");
   assert.equal(decideVerdict({ overall: 7, clarity: 9, credibility: 9 }, RUBRIC), "keep");
 });
+
+// ── Tool isolation (panelist#72) ─────────────────────────────────────────────
+
+test("scoreCandidate isolation defaults to [] when deps.tools is omitted", async () => {
+  const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  assert.deepEqual(res.isolation, { tools: [], denied: [] });
+});
+
+test("scoreCandidate isolation reflects an explicit deps.tools grant", async () => {
+  const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, tools: ["recall"] });
+  assert.deepEqual(res.isolation, { tools: ["recall"], denied: [] });
+});
+
+test("scoreCandidate throws on a wildcard deps.tools grant instead of silently collapsing to []", async () => {
+  const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
+  await assert.rejects(() => score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, tools: "*" }), /wildcard/);
+});
