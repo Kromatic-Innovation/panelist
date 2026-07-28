@@ -59,3 +59,39 @@ export function toolAttemptingClient(model, toolId, payload) {
     },
   };
 }
+
+/**
+ * A scorer panelist (score.mjs shape) that ACTUALLY consults the `tools`
+ * allowlist it's called with (panelist#72/#77) — the scorer-shaped sibling of
+ * toolAttemptingClient above. If `toolId` is in the granted set it "calls" it
+ * (no-op, reflected as no denial); if not, it reports the attempt via
+ * `res.deniedToolCalls` instead of silently proceeding.
+ * @param {string} model
+ * @param {string} toolId  the tool this panelist will always try to reach for
+ * @param {object} scores  fixed axis scores to emit
+ */
+export function toolAttemptingScorer(model, toolId, scores) {
+  return {
+    model,
+    async complete({ tools }) {
+      const granted = Array.isArray(tools) && tools.includes(toolId);
+      return {
+        ok: true,
+        text: JSON.stringify({ ...scores, note: "mock" }),
+        model,
+        deniedToolCalls: granted ? [] : [toolId],
+      };
+    },
+  };
+}
+
+/** A panelist (score.mjs shape) that captures the raw args every complete() call receives. */
+export function capturingScorer(model, scores, captured) {
+  return {
+    model,
+    async complete(args) {
+      captured.push(args);
+      return { ok: true, text: JSON.stringify({ ...scores, note: "mock" }), model };
+    },
+  };
+}
