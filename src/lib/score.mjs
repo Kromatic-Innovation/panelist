@@ -11,8 +11,15 @@
 // verdict logic are preserved from the source engine.
 //
 // ADAPTER CONTRACT (a "panelist" / "client"):
-//   { model: string, complete: async ({ prompt, maxTokens, temperature }) =>
-//       { ok: true, text: string, model?: string } | { ok: false, reason?: string } }
+//   { model: string, complete: async ({ prompt, maxTokens, temperature, tools }) =>
+//       { ok: true, text: string, model?: string, deniedToolCalls?: array } | { ok: false, reason?: string } }
+//
+// Isolation (panelist#72/#77): deny by default via deps.tools/deps.toolGate
+// (isolation.mjs's createToolGate), same posture as spawn.mjs/junction.mjs. The
+// returned `isolation: { tools, denied }` envelope is honest — it reflects what
+// was actually forwarded and denied, not just what was requested. The
+// neutral/heuristic-fallback path (no model client invoked) stays `{ tools: [],
+// denied: [] }` unconditionally; that is correct, not an oversight.
 //
 // PUBLIC API
 //   score(candidate, personas, rubric, deps)  -> evaluation (alias scoreCandidate)
@@ -33,7 +40,7 @@
 // ── Rubric normalization ────────────────────────────────────────────────────
 
 import { USAGE_HEADER } from "./schema.mjs";
-import { buildIsolationEnvelope, resolveEffectiveTools } from "./isolation.mjs";
+import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
 
 const DEFAULT_AXES = ["resonance", "clarity", "credibility", "scrollStop"];
 const DEFAULT_CUT_THRESHOLD = 5.0;
@@ -237,6 +244,15 @@ function spansMultipleProviders(modelIds) {
   return new Set(modelIds.map(providerOf)).size >= 2;
 }
 
+/** Normalize a client-reported denial entry (string tool id, or {tool, at}) into the locked shape. */
+function normalizeReportedDenial(entry, reviewer) {
+  if (typeof entry === "string") return recordDenial(entry, reviewer);
+  if (entry && typeof entry === "object" && typeof entry.tool === "string") {
+    return recordDenial(entry.tool, reviewer, entry.at);
+  }
+  return null;
+}
+
 // ── Core scoring ─────────────────────────────────────────────────────────────
 
 /**
@@ -267,6 +283,12 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   const norm = normalizeRubric(rubric);
   const buildPrompt = deps.buildPrompt || buildEvalPrompt;
 
+  // Isolation (panelist#72/#77): deny by default, same posture as spawn.mjs and
+  // runJunctionLoop. A caller may share one gate (deps.toolGate); otherwise
+  // scoreCandidate builds its own from deps.tools, defaulting to [] when omitted.
+  const gate = deps.toolGate || createToolGate({ tools: deps.tools, reviewer: "score" });
+  const reportedDenied = [];
+
   const byPersona = [];
   const modelRows = new Map();
   let panelistsFailed = 0;
@@ -283,7 +305,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     tasks.map((t) =>
       run(async () => {
         try {
-          return await t.panelist.complete({ prompt: t.prompt, maxTokens: 512, temperature: 0 });
+          return await t.panelist.complete({ prompt: t.prompt, maxTokens: 512, temperature: 0, tools: gate.tools });
         } catch {
           return { ok: false, reason: "threw" };
         }
@@ -298,6 +320,14 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     if (!res || res.ok !== true || typeof res.text !== "string") {
       panelistsFailed++;
       continue;
+    }
+    // Merge the gate's own denials (recorded by gate.check() calls, if the
+    // adapter used it) with any the adapter self-reports via res.deniedToolCalls
+    // — an adapter that enforces upstream of panelist still gets denials surfaced.
+    const reported = Array.isArray(res.deniedToolCalls) ? res.deniedToolCalls : [];
+    for (const entry of reported) {
+      const denial = normalizeReportedDenial(entry, persona.id || persona.name || "persona");
+      if (denial) reportedDenied.push(denial);
     }
     const score = extractScore(res.text, norm.axes);
     if (!score) {
@@ -335,13 +365,13 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     crossModel: spansMultipleProviders(Object.keys(byModel)),
     panelistsFailed,
     honesty: USAGE_HEADER,
-    // score.mjs's programmatic plane never grants a persona a tool (deps.panel
-    // clients are plain text-completion adapters, not agentic subagents) —
-    // isolation.tools defaults to []. deps.tools lets a caller declare an
-    // explicit grant if their panel wraps an agentic/tool-capable adapter.
-    // Routed through resolveEffectiveTools so a wildcard grant throws here
-    // too, same as spawn — it must not silently collapse to [].
-    isolation: buildIsolationEnvelope(resolveEffectiveTools(deps.tools), []),
+    // Isolation (panelist#72/#77): deny by default. deps.tools lets a caller
+    // declare an explicit grant if their panel wraps an agentic/tool-capable
+    // adapter; the gate enforces it (forwarded to every complete() call above)
+    // and denied carries both the gate's own denials and any the adapter
+    // self-reports via res.deniedToolCalls. A wildcard grant throws — see
+    // isolation.mjs's createToolGate/resolveEffectiveTools.
+    isolation: buildIsolationEnvelope(gate.tools, [...gate.denied, ...reportedDenied]),
   };
 }
 

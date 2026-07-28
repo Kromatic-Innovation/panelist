@@ -94,11 +94,13 @@ follow-up turn. A persistent, multi-turn/agentic converse plane (subagents,
 tool use, actual back-and-forth) is a **later slice (panelist#4)**, not
 something this contract already does under a friendlier name.
 
-## Two execution planes
+## Execution planes
 
-panelist ships two ways to invoke a persona, and both consume the **same
-persona identity** (the register record: `caresAbout` / `rewards` / `punishes`
-/ `quitsWhen`) and, for `spawn`, the **same wrapper contract** described here:
+panelist ships three ways to invoke a persona — `score`, `spawn`, and the
+multi-turn `runJunctionLoop` (see ["Forward-compat"](#forward-compat)) — and
+all consume the **same persona identity** (the register record: `caresAbout`
+/ `rewards` / `punishes` / `quitsWhen`) and, for `spawn`, the **same wrapper
+contract** described here:
 
 | Plane            | Entry point                              | Shape                                                                                                                   | Use for                                                                                                 |
 | ---------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |

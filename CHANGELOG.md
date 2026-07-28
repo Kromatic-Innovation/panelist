@@ -46,6 +46,19 @@ changes default behavior for existing callers of `spawn`/`runPersona`.
   `client.complete()` call through it, and returns
   `isolation: { tools, denied }` on every stop path — bail, patience-budget
   exhaustion, terminal, and invalid-decision alike.
+- **The programmatic scoring plane is now gated too, closing the last hole
+  (#77).** `scoreCandidate`/`score` accepted `deps.tools` and reported it in
+  the `isolation` envelope as granted, but never forwarded it to the injected
+  panel and never checked anything — `isolation.denied` was hardcoded `[]`.
+  An envelope reporting enforcement it never performed is worse than no
+  envelope: it turned "unknown" into a false "verified". `scoreCandidate` now
+  builds a `createToolGate` from `deps.tools`/`deps.toolGate`, forwards the
+  gated tool set to every `panelist.complete()` call, and merges the gate's
+  own denials with adapter-reported `res.deniedToolCalls` into the envelope —
+  the same posture `spawn`/`runJunctionLoop` already had. The neutral/
+  heuristic-fallback path (no model client invoked) is unchanged: it still
+  emits `{ tools: [], denied: [] }` unconditionally, which is honest because
+  no client is ever called on that path.
 - Documented the isolation guarantee in the README next to the honesty
   caveat — "a persona sees the artifact and nothing else" is now a structural
   claim, not an aspiration.
