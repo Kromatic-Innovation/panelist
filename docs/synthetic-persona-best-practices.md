@@ -56,10 +56,21 @@ Controls that keep this honest in practice:
   rating. A cut-list can be wrong; it can't be flattered.
 - **Cross-model panels, ≥2 providers.** Same-model self-preference is real — a model
   scoring its own output (or output styled the way it likes) is a sycophancy vector
-  by construction. ≥2 providers is the minimum panel size that catches it.
-- **Kill-floors.** A panel that never produces a kill isn't diverse, it's agreeing
-  with itself. If zero personas quit on a draft that a human reviewer would flag,
-  treat that as a panel failure, not a clean bill of health.
+  by construction. ≥2 providers is the minimum panel size that catches it. panelist
+  does not enforce this — it bundles no provider layer, so it can't compose the
+  panel for you or refuse to run a single-provider one. It only *reports* whether
+  the panel you composed spans ≥2 providers, via `crossModel` on every result; you
+  are responsible for composing a ≥2-provider panel and checking that flag if the
+  property matters to you.
+- **Kill-floors _(not yet implemented in panelist)_.** A panel that never produces
+  a kill isn't diverse, it's agreeing with itself. If zero personas quit on a draft
+  that a human reviewer would flag, treat that as a panel failure, not a clean bill
+  of health. This is a practice to apply in your own harness across a corpus of
+  runs — panelist does not compute a panel-level kill-rate signal today. Don't
+  confuse it with `score.mjs`'s `killAxes`/`killFloor`, which is a different,
+  already-implemented mechanism: a per-axis *verdict* rule that cuts a single
+  candidate when one axis's score falls below a floor, not a signal that a whole
+  panel is failing to diversify across a corpus.
 - **Adversarial framing.** Ask "where would you quit" and "what would make you
   refuse to forward this," not "what do you think" — the instruction shape itself
   determines whether the model reaches for praise or for a specific failure point.

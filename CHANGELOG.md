@@ -38,6 +38,20 @@ takes over.
   `maxTokens`-truncated reply lands in). `panelistsFailed` itself is
   unchanged for back-compat; all new fields are additive.
 
+### Docs
+
+- **README and best-practices doc reconciled with actual cross-model and
+  kill-floor behavior (#87).** README's "Cross-model panels" bullet and
+  intro line read as if panelist enforced a ≥2-provider panel by default;
+  in fact panelist bundles no provider layer, cannot compose the panel for
+  the caller, and a single-provider panel runs to completion and returns
+  `crossModel: false` — the flag is reported, not enforced. Both spots now
+  say so explicitly. Separately, `docs/synthetic-persona-best-practices.md`'s
+  "Kill-floors" bullet described a panel-level kill-rate signal that no code
+  computes; it's now annotated `(not yet implemented in panelist)` and
+  distinguished from the unrelated, already-implemented per-axis
+  `killAxes`/`killFloor` verdict rule in `score.mjs`. No behavior changed.
+
 ### Security
 
 - **OSS "go-public" workflow gates revisited against live platform behavior
