@@ -156,6 +156,38 @@ Run it:
 Run it when adding a new provider, or upgrading/retiring a model id in the supported
 lineup. See [`eval/README.md`](eval/README.md) for the full matrix shape and details.
 
+## Eval: tool-injection (manual, spends tokens)
+
+`eval/tool-injection.mjs` is a **small security regression test** (four cases, not an
+eval suite, not fuzzing) that checks whether the tool-isolation gate
+(`src/lib/isolation.mjs`) holds when a **real model** is induced, via injected
+artifact text, into unauthorized tool use. It asserts the gate's own behavior
+(`isolation.tools` / `isolation.denied`) — never model wording, never verdict
+quality. See [`docs/invocation-contract.md#tool-isolation-panelist72`](docs/invocation-contract.md#tool-isolation-panelist72)
+for the isolation contract itself.
+
+Run it:
+
+- **Manually via GitHub Actions** — dispatch the "Eval - Tool Injection" workflow
+  (`.github/workflows/eval-tool-injection.yml`, `workflow_dispatch` only; needs the
+  same 1Password-provisioned `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` as the
+  contract-conformance eval — see #108).
+- **Locally** — `ANTHROPIC_API_KEY=... OPENAI_API_KEY=... node eval/tool-injection.mjs`
+  (a provider with no key set is skipped, not treated as a failure). With no
+  credentials at all it still runs `--self-test` (the same four cases' assertion
+  logic against panelist's own mock tool-attempting client) so the gate-assertion
+  code path is proven correct offline.
+
+Run it after touching `isolation.mjs` or any of the prompt builders (`buildSpawnPrompt`,
+`buildEvalPrompt`, the junction loop's `CONTRACT`).
+
+It spends real tokens and is manual-only — never wired to `push`/`pull_request`, never
+a required check. **A pass on the `"""`-fence case does NOT close panelist#82** —
+injected verdict/axis-score manipulation is a separate, ungated surface that needs no
+tools at all; a pass here only means one model on one payload didn't take the bait.
+See the file header comment in `eval/tool-injection.mjs` for the full case-by-case
+reasoning.
+
 ## Status
 
 Early. Developed internally, then open sourced. Apache-2.0.

@@ -1,0 +1,56 @@
+name: Eval - Tool Injection
+
+# MANUAL ONLY. This workflow spends real tokens against real provider APIs
+# (Anthropic + OpenAI) to confirm panelist's tool-isolation gate
+# (src/lib/isolation.mjs) holds against a real model being induced, via
+# injected artifact text, into unauthorized tool use (panelist#96). It is a
+# SMALL security regression test (four cases), not an eval suite and not
+# fuzzing — it asserts the GATE's behavior (isolation.tools / isolation.denied),
+# never model wording or verdict quality. It must NEVER run on push or
+# pull_request, and it must NEVER be added as a required check —
+# workflow_dispatch only.
+#
+# A pass on Case 4 (the """ fence) does NOT close panelist#82 (injected
+# verdict/axis-score manipulation is a separate, ungated surface that needs
+# no tools at all) — see eval/tool-injection.mjs's file header and
+# eval/README.md.
+#
+# Credential provisioning (maintainer action required, tracked by #108):
+#   The `op://` references below are the SAME credentials as
+#   eval-contract-conformance.yml (panelist#95) — see that workflow's header
+#   comment for the 1Password vault setup steps. No new secrets are needed
+#   for this workflow specifically.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  tool-injection:
+    name: Tool Injection (manual eval — spends tokens)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+
+      # Same 1password/load-secrets-action + OP_SERVICE_ACCOUNT_TOKEN pattern
+      # as .github/workflows/eval-contract-conformance.yml (panelist#95) and
+      # promote-main.yml — mirrored in shape, same credentials (#108).
+      - name: Load provider API keys from 1Password
+        uses: 1password/load-secrets-action@v4
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          ANTHROPIC_API_KEY: op://Infrastructure/anthropic-api-key/credential
+          OPENAI_API_KEY: op://Infrastructure/openai-api-key/credential
+
+      - name: Run tool-injection eval
+        run: node eval/tool-injection.mjs
