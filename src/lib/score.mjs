@@ -47,6 +47,17 @@ const DEFAULT_CUT_THRESHOLD = 5.0;
 const DEFAULT_KILL_FLOOR = 4.0;
 const DEFAULT_CONCURRENCY = 8;
 
+// The neutral score stamped on every axis when the WHOLE panel fails and no
+// custom fallback is supplied. Named here so its collision with
+// DEFAULT_CUT_THRESHOLD (both 5) is visible at the point of definition: a
+// neutral 5 on every axis aggregates to overall 5, and `decideVerdict` cuts
+// only on `overall < cut_threshold`, so `5 < 5` is false. DERIVING the fallback
+// verdict from these scores therefore returned "keep" on a total provider
+// outage — a fail-OPEN pre-filter (panelist#80). The fallback verdict is now
+// pinned to FALLBACK_VERDICT rather than derived, so a dead panel fails CLOSED.
+const NEUTRAL_FALLBACK_SCORE = 5;
+const FALLBACK_VERDICT = "cut";
+
 /**
  * A tiny promise-concurrency limiter. Returns `run(fn)` that defers `fn` until
  * fewer than `max` tasks are in flight. Bounds the persona x panelist fan-out.
@@ -403,10 +414,10 @@ export function decideVerdict(aggregate, rubric) {
   return "keep";
 }
 
-/** Whole-panel-failure fallback: neutral, marked, requires human review. */
+/** Whole-panel-failure fallback: neutral scores, marked, but fails CLOSED. */
 function neutralFallback(candidate, panelistsFailed, rubric) {
   const norm = normalizeRubric(rubric);
-  const s = 5;
+  const s = NEUTRAL_FALLBACK_SCORE;
   const row = {
     persona: "fallback",
     model: "heuristic:fallback",
@@ -422,7 +433,11 @@ function neutralFallback(candidate, panelistsFailed, rubric) {
     candidate,
     scores: { byPersona: [row], byModel: { "heuristic:fallback": aggregate.overall } },
     aggregate,
-    verdict: decideVerdict(aggregate, norm),
+    // Pinned to FALLBACK_VERDICT, NOT derived from the neutral scores: a total
+    // panel failure must never surface a passing verdict to a programmatic gate
+    // (panelist#80). The neutral 5s are still reported for human context; the
+    // machine-readable verdict fails closed.
+    verdict: FALLBACK_VERDICT,
     crossModel: false,
     panelistsFailed,
     fallback: true,
