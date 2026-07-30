@@ -8,7 +8,7 @@
 
 **What panelist is:** Synthetic user panels for any artifact, run across multiple model providers to correct for self-preference bias. Most tools of this kind return a warmth score, which invites "the AI loved it" misuse. Panelist models behavior instead: the exact point a persona quits, dismisses, or refuses to click like.
 
-**Differentiator:** panelist's primary output is a **deal-killer / cut-list**: the exact point a persona would quit, dismiss, refuse to click, or refuse to forward — abandonment is behavioral and far more reliably simulable than affect. Panels are cross-model by default (fighting same-model self-preference bias), personas differ by _what makes them quit_ rather than demographics, and every output auto-stamps the honesty caveat that this is a pre-filter, not user research.
+**Differentiator:** panelist's primary output is a **deal-killer / cut-list**: the exact point a persona would quit, dismiss, refuse to click, or refuse to forward — abandonment is behavioral and far more reliably simulable than affect. panelist reports whether a panel spans ≥2 model providers (fighting same-model self-preference bias) via a `crossModel` flag on every result — the caller composes the panel and should check the flag if that property matters, since a single-provider panel still runs to completion. Personas differ by _what makes them quit_ rather than demographics, and every output auto-stamps the honesty caveat that this is a pre-filter, not user research.
 
 **Why:** a 9/10 score from a model that wants to please you is worthless as a filter. A specific point where three independent, cross-model personas all disengage is an actionable signal — that's the difference panelist is built around.
 
@@ -21,7 +21,7 @@
 Most tools that spawn personas emit a warmth/viability _score_ — the exact output that invites "look, the AI loves it" misuse. panelist's primary output is a **deal-killer / cut-list**: _where would this persona stop, dismiss, or refuse to click, forward, or buy?_ Abandonment is behavioural and far more robustly simulable than affect.
 
 - **Deal-killers, not scores.** The default verdict is a cut-list, not a rating.
-- **Cross-model panels.** ≥2 providers by default (designed to wrap a provider layer you supply, e.g. PromptFoo/LiteLLM — not hand-rolled) to counter same-model self-preference / sycophancy bias.
+- **Cross-model panels, reported not enforced.** panelist bundles no provider layer (you inject one, e.g. PromptFoo/LiteLLM — see [Install](#install)), so it can't compose a cross-model panel for you or refuse to run a single-provider one. Every result carries `crossModel: boolean` (`true` when the panel you composed spans ≥2 providers) so you can check it yourself; a single-provider panel still runs to completion and returns `crossModel: false`. Spanning ≥2 providers is recommended to counter same-model self-preference / sycophancy bias — the caller is responsible for composing the panel that way.
 - **Diversity by kill-condition.** Personas differ by _what makes them quit_, not by demographics. Identity is behavioural (`rewards` / `punishes` / `quitsWhen`), never age/employer/tenure.
 - **Honesty by construction.** Every panel output auto-stamps the caveat above.
 - **Isolated by construction.** No tool is reachable unless explicitly granted — see above.
