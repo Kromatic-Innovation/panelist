@@ -33,7 +33,7 @@
 // strings, or `{ tool, at }` objects) — spawn merges those into `isolation.denied`.
 
 import { getPersona } from "./register.mjs";
-import { renderPersona, extractJsonObject } from "./score.mjs";
+import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
 import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
 
@@ -98,7 +98,7 @@ export function buildSpawnPrompt({ persona, mode, artifact, instruction, respons
     horizon ? `TIME HORIZON: ${horizon}` : "",
     "",
     "ARTIFACT UNDER REVIEW:",
-    `"""${artifactText}"""`,
+    fenceArtifact(artifactText),
     "",
     hasSchema ? `RESPONSE SCHEMA for verdict:\n${JSON.stringify(responseSchema)}` : "",
     "",

@@ -27,6 +27,7 @@
 //   extractScore(text, axes)         robust JSON score parser
 //   extractJsonObject(text)          generic first-balanced-object parser
 //   buildEvalPrompt({...})           default prompt builder (overridable via deps)
+//   fenceArtifact(text)              wrap untrusted text in an unbreakable """ fence (panelist#82)
 //   normalizeRubric(rubric)          fill rubric defaults
 //   createLimiter(max)               tiny promise-concurrency limiter
 //
@@ -103,6 +104,34 @@ export function normalizeRubric(rubric = {}) {
 
 // ── Default prompt construction (overridable via deps.buildPrompt) ────────────
 
+// Zero-width space (U+200B) used to break up runs of `"` so an untrusted
+// artifact can never reproduce the literal `"""` fence delimiter.
+const ZERO_WIDTH_SPACE = "​";
+
+/**
+ * Fence untrusted artifact/content text with `"""` delimiters, NEUTRALIZING any
+ * internal occurrence of the fence delimiter first (panelist#82). Without this,
+ * an artifact whose text contains `"""` can close its own fence early and let
+ * whatever follows (an injected instruction, or — worst case, on the SCORE
+ * plane — forged axis JSON) flow past the intended containment and reach the
+ * model as if it were part of the prompt scaffold rather than untrusted input.
+ *
+ * Neutralization: any run of 3-or-more double-quote characters has a
+ * zero-width space inserted between each quote, so the run can no longer match
+ * `"""` as a substring. This is deterministic (no random delimiter — tests must
+ * be reproducible) and visually lossless: a model (and a human) still sees the
+ * same quote characters, just with an invisible break inserted between them.
+ * After neutralization, the ONLY two `"""` substrings in the returned string
+ * are the intended opening and closing fences.
+ *
+ * @param {*} text  untrusted text (coerced to a string; null/undefined -> "").
+ * @returns {string} `"""<neutralized text>"""`
+ */
+export function fenceArtifact(text) {
+  const safe = String(text ?? "").replace(/"{3,}/g, (m) => m.split("").join(ZERO_WIDTH_SPACE));
+  return `"""${safe}"""`;
+}
+
 /** Render a behavioural persona (caresAbout / rewards / punishes / quitsWhen). */
 export function renderPersona(p) {
   const block = (label, items) => {
@@ -152,7 +181,7 @@ export function buildEvalPrompt({ persona, candidate, rubric, intro }) {
     renderPersona(persona),
     "",
     "UNDER REVIEW:",
-    `"""${cand.text != null ? cand.text : ""}"""`,
+    fenceArtifact(cand.text != null ? cand.text : ""),
     cand.channel ? `(channel: ${cand.channel}; format: ${cand.format || "?"})` : "",
     "",
     rubricText(norm),
