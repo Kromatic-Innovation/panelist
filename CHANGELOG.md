@@ -17,6 +17,34 @@ takes over.
 
 ### Added
 
+- **New manual eval: tool-use prompt-injection regression against real models
+  (#96).** `eval/tool-injection.mjs` is a small, manually-triggered (never
+  CI, never a required check) security regression test — four adversarial
+  cases, not an eval suite, not fuzzing — that confirms the tool-isolation
+  gate (`src/lib/isolation.mjs`) holds when a real model (one Anthropic, one
+  OpenAI) is induced, via injected artifact text, into unauthorized tool
+  use. Every assertion reads the gate's own `isolation.tools`/
+  `isolation.denied` envelope, never model wording or verdict quality. Case
+  2 confirms a granted tool stays usable after an ungranted attempt is
+  denied (no false-positive lockout); Case 3 confirms the `DISCOVERY_TOOLS`
+  closed-under-discovery invariant against a live model; Case 4 exercises
+  the `"""`-fence neutralization from #82 but is explicitly documented as
+  weak evidence that does **not** close #82 (a separate, ungated
+  verdict/axis-score-injection surface). Factored the raw-`fetch` provider
+  adapter plumbing out of `eval/contract-conformance.mjs` into a new shared
+  `eval/_adapters.mjs` (re-pointed #95's import; #95's own behavior is
+  unchanged) and added `toolCapableAnthropicClient`/
+  `toolCapableOpenaiClient`, which expose a fixed probe tool set
+  (`recall`/`web_fetch`/`tool_search`) at the provider API level and report
+  every attempted-but-ungranted call via `deniedToolCalls`. With no
+  credentials, `node eval/tool-injection.mjs` (or `--self-test`) runs the
+  same four cases' assertion logic against panelist's own mock
+  tool-attempting client (`test/_helpers.mjs`), proving the gate-assertion
+  code path offline. Zero added dependency. Triggered via
+  `.github/workflows/eval-tool-injection.yml` (`workflow_dispatch` only;
+  same 1Password credentials as #95, tracked by #108). See the new "Eval:
+  tool-injection" README section and `eval/README.md`.
+
 - **New manual eval: contract conformance across supported models (#95).**
   `eval/contract-conformance.mjs` is a manually-triggered (never CI, never a
   required check) harness that checks whether panelist's DEFAULT prompts

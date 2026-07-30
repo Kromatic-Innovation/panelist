@@ -23,10 +23,13 @@
 // This file is a CONSUMER of panelist through the existing injected-client
 // contract `{ model, complete: async ({ prompt, maxTokens, temperature,
 // tools }) => ({ ok, text, model }) }` — exactly like a real caller would
-// wire up PromptFoo/LiteLLM/etc. Provider calls below use Node 20's built-in
+// wire up PromptFoo/LiteLLM/etc. Provider calls use Node 20's built-in
 // global `fetch` directly against the Anthropic Messages API and the OpenAI
-// Chat Completions API. No SDK. Nothing is added to `dependencies` or
-// `devDependencies`.
+// Chat Completions API, via the shared adapter plumbing in
+// eval/_adapters.mjs (panelist#96 factored this out so the tool-injection
+// harness could reuse it — this file's own behavior is unchanged, still
+// text-only, `tools` never sent to the provider). No SDK. Nothing is added
+// to `dependencies` or `devDependencies`.
 //
 // Run locally:
 //   ANTHROPIC_API_KEY=... OPENAI_API_KEY=... node eval/contract-conformance.mjs
@@ -43,6 +46,7 @@ import { spawn, buildSpawnPrompt } from "../src/lib/spawn.mjs";
 import { runJunctionLoop } from "../src/lib/junction.mjs";
 import { registerPersonas, getPersona, clearRegistry } from "../src/lib/register.mjs";
 import reviewPack from "../packs/review/index.mjs";
+import { textClientFor, apiKeyNameFor } from "./_adapters.mjs";
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODELS IN SCOPE
@@ -66,87 +70,18 @@ const PLANES = ["scoring", "singleTurn", "singleTurnSchema", "multiTurn"];
 const VOTE_SCHEMA = { type: "object", properties: { verdict: { enum: ["approve", "reject"] } } };
 
 // ─────────────────────────────────────────────────────────────────────────
-// Minimal provider adapters — raw fetch, no SDK.
-//
-// Each returns the injected-client shape score.mjs/spawn.mjs/junction.mjs
-// expect: { model, complete: async ({ prompt, maxTokens, temperature }) =>
-// { ok, text, model } }. A transport/HTTP failure resolves `{ ok: false,
-// reason }` rather than throwing, so one bad call doesn't crash the matrix
-// (score.mjs already treats a thrown complete() as "failed"; spawn/junction
-// require ok:true or they throw — the harness catches that per-cell, see
-// runCell below).
+// Provider adapters — factored into eval/_adapters.mjs (panelist#96) so the
+// tool-injection harness can reuse the same raw-fetch plumbing instead of
+// duplicating it. Each returns the injected-client shape
+// score.mjs/spawn.mjs/junction.mjs expect: { model, complete: async ({
+// prompt, maxTokens, temperature }) => { ok, text, model } }. A
+// transport/HTTP failure resolves `{ ok: false, reason }` rather than
+// throwing, so one bad call doesn't crash the matrix (score.mjs already
+// treats a thrown complete() as "failed"; spawn/junction require ok:true or
+// they throw — the harness catches that per-cell, see runCell below).
 // ─────────────────────────────────────────────────────────────────────────
 
-function anthropicClient(modelId, apiKey) {
-  return {
-    model: modelId,
-    async complete({ prompt, maxTokens, temperature }) {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: modelId,
-          max_tokens: maxTokens ?? 512,
-          temperature: temperature ?? 0,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        return { ok: false, reason: `anthropic HTTP ${res.status}: ${body.slice(0, 300)}` };
-      }
-      const json = await res.json();
-      const text = Array.isArray(json.content)
-        ? json.content.filter((b) => b.type === "text").map((b) => b.text).join("")
-        : "";
-      return { ok: true, text, model: modelId };
-    },
-  };
-}
-
-function openaiClient(modelId, apiKey) {
-  return {
-    model: modelId,
-    async complete({ prompt, maxTokens, temperature }) {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: modelId,
-          max_tokens: maxTokens ?? 512,
-          temperature: temperature ?? 0,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        return { ok: false, reason: `openai HTTP ${res.status}: ${body.slice(0, 300)}` };
-      }
-      const json = await res.json();
-      const text = json.choices?.[0]?.message?.content ?? "";
-      return { ok: true, text, model: modelId };
-    },
-  };
-}
-
-function clientFor(modelEntry, env) {
-  if (modelEntry.provider === "anthropic") {
-    if (!env.ANTHROPIC_API_KEY) return null;
-    return anthropicClient(modelEntry.id, env.ANTHROPIC_API_KEY);
-  }
-  if (modelEntry.provider === "openai") {
-    if (!env.OPENAI_API_KEY) return null;
-    return openaiClient(modelEntry.id, env.OPENAI_API_KEY);
-  }
-  return null;
-}
+const clientFor = textClientFor;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Real fixtures: the shipped review pack + a minimal real junction graph, so
@@ -343,7 +278,7 @@ async function main(env = process.env) {
     const row = { label: `${modelEntry.id} (${modelEntry.tier})`, cells: {} };
     for (const plane of PLANES) {
       if (!client) {
-        const keyName = modelEntry.provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+        const keyName = apiKeyNameFor(modelEntry);
         row.cells[plane] = { skipped: true, reason: `no ${keyName}` };
         console.log(`skipped: no ${keyName} — ${modelEntry.id} / ${plane}`);
         continue;
