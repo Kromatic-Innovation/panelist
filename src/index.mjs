@@ -12,8 +12,10 @@
 // landed too. Full honesty guardrails (panelist#6) are now landing: every panel
 // output is auto-stamped with the honesty caveat by construction (score.mjs),
 // formatPanelSummary leads with verdict/deal-killers (never a warmth score),
-// and drift-check gains a checkHonesty guardrail so CI can assert no summary
-// omits the caveat. A live PromptFoo/LiteLLM provider remains a later slice.
+// and drift-check gains a checkHonesty guardrail, exercised in CI by the
+// test suite (test/honesty-gate.test.mjs) over real plane outputs, so no
+// summary can silently omit the caveat. A live PromptFoo/LiteLLM provider
+// remains a later slice.
 export const PANELIST_VERSION = "0.3.0";
 
 // Registry — compose personas/rubrics at runtime.
@@ -85,6 +87,9 @@ export {
 } from "./lib/schema.mjs";
 
 // Drift-check (repo-scoped record validation + honesty-stamp guardrail).
+// checkHonesty is the batch guardrail: not called by drift-check's own
+// CLI/main() (which scans repo records, not panel summaries) — it is
+// invoked in CI by test/honesty-gate.test.mjs over real plane outputs.
 export {
   checkRecords,
   scanRepo as driftScanRepo,

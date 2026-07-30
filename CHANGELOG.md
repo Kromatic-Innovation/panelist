@@ -156,6 +156,27 @@ takes over.
   asserts `scanRepo` reports `ok: false` for it, proving the gate actually
   fails on drift rather than always exiting 0.
 
+- **`checkHonesty` had zero call sites — the batch honesty-stamp guardrail
+  shipped but nothing ran it (#86).** `drift-check.mjs`'s `checkHonesty`
+  (added alongside #6/#81's per-surface stamping) takes a batch of panel
+  summaries/envelopes and reports which omit the honesty caveat, but it was
+  never invoked by `main()`, any test, or CI — exactly the kind of gap that
+  let #81's stamping hole go unnoticed. `checkHonesty` is intentionally NOT
+  wired into `drift-check.mjs`'s `main()`/`scanRepo` (those scan repo
+  records, not panel summaries; forcing it in there would be wrong). Added
+  `test/honesty-gate.test.mjs`, which builds a real batch from every
+  execution plane (`score`, `rankCandidatesWith`, `spawn`,
+  `runJunctionLoop`, `aggregateJunctionTraces`, `calibratePersonas`) offline,
+  asserts `checkHonesty` passes it, then mixes in a deliberately-unstamped
+  summary and asserts `checkHonesty` fails with the exact offending
+  index/indices — so the gate can now actually fail, and does. This test
+  runs under `node --test test/*.test.mjs`, which CI already gates on.
+  Also corrected the three prose references to this guardrail
+  (`src/index.mjs`'s header comment and `checkHonesty` re-export comment,
+  `drift-check.mjs`'s module docstring) so none of them implies
+  `main()`/the CLI runs it — they now say the guardrail is exercised in CI
+  by the test suite.
+
 ## [0.3.0] - 2026-07-28
 
 **Breaking.** Bumped as a MINOR under pre-1.0 semantics (see above) because it
