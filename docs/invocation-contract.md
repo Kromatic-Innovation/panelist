@@ -39,7 +39,7 @@ spawn(
 Every call, in every mode, returns exactly this shape:
 
 ```js
-{ personaId, mode, verdict: object | null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] } }
+{ personaId, mode, verdict: object | null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] }, honesty: string }
 ```
 
 There is one wrapper, not one-per-mode. `spawn.mjs` builds it the same way
@@ -255,9 +255,16 @@ const result = await spawn(
   is the multi-turn generalization, not a variant of `spawn`'s wrapper — it
   returns its own shape (`{ strategy, path, stopReason, trace, isolation, ... }`),
   not `{ personaId, mode, verdict, message, dealKillers, isolation }`.
-- **panelist#6 — honesty-guardrail auto-stamp.** Per
-  `synthetic-persona-best-practices.md` §6, every panel output should
-  auto-stamp the "this is not user research" caveat by construction. Today
-  that discipline lives in the surrounding docs/README, not the wrapper
-  itself. panelist#6 is expected to add the stamp as a field on this same
-  wrapper — additive, not a breaking reshape of `spawn`'s contract.
+- **panelist#6/#81 — honesty-guardrail auto-stamp — shipped.** Per
+  `synthetic-persona-best-practices.md` §6, every panel output auto-stamps
+  the "this is not user research" caveat by construction. This is no longer
+  just surrounding docs/README discipline: `spawn`'s returned wrapper (see
+  "Response wrapper" above) now carries a `honesty` field, added via
+  `honesty.mjs`'s `stampHonesty` — additive, not a breaking reshape of
+  `spawn`'s contract. `runPersona` (`runner.mjs`) delegates to `spawn`
+  unmodified, so it inherits the same stamp. The other public output
+  surfaces enumerated by panelist#81 (`score`/`rankCandidatesWith`,
+  `runJunctionLoop`'s envelope, `aggregateJunctionTraces`,
+  `calibratePersonas`) are stamped the same way; `runJunctionLoop`'s nested
+  `trace` is deliberately left unstamped since its per-turn shape is locked
+  (`REACTION_KEYS`/`TRACE_KEYS`, `junction-schema.mjs`).

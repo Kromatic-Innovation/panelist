@@ -35,6 +35,7 @@
 import { getPersona } from "./register.mjs";
 import { renderPersona, extractJsonObject } from "./score.mjs";
 import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
+import { stampHonesty } from "./honesty.mjs";
 
 const MODES = new Set(["vote", "comment", "converse"]);
 
@@ -140,7 +141,7 @@ function normalizeReportedDenial(entry, reviewer) {
  *   @param {function} [deps.buildPrompt]     override buildSpawnPrompt.
  *   @param {object} [deps.toolGate]          share a gate (createToolGate) across a multi-persona panel
  *     instead of spawn building its own from opts.tools.
- * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] } }>}
+ * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] }, honesty: string }>}
  */
 export async function spawn(personaId, opts = {}, deps = {}) {
   const { mode, artifact, instruction, responseSchema, horizon, tools } = opts;
@@ -179,5 +180,8 @@ export async function spawn(personaId, opts = {}, deps = {}) {
   const denied = [...gate.denied, ...reported.map((entry) => normalizeReportedDenial(entry, personaId)).filter(Boolean)];
   const isolation = buildIsolationEnvelope(gate.tools, denied);
 
-  return { personaId, mode, verdict, message, dealKillers, isolation };
+  // Auto-stamp the honesty caveat on the returned envelope (panelist#81,
+  // PAN-01) — spawn is the foundational single-turn contract, and runPersona
+  // (runner.mjs) delegates to it unmodified, so this covers both surfaces.
+  return stampHonesty({ personaId, mode, verdict, message, dealKillers, isolation });
 }

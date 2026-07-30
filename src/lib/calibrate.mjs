@@ -24,6 +24,17 @@
 //   spearmanRankCorrelation(a, b)   Spearman's rho, ties via average rank
 //   keptSetHitRate(kept, good)     |kept ∩ good| / |kept|
 //   calibratePersonas({ items, syntheticByPersona, realSignal, keepThreshold?, goodThreshold? })
+//
+// Honesty stamp (panelist#81): calibratePersonas's `note` field already carries
+// honesty LANGUAGE ("it is NOT validation...") but that text alone does not
+// satisfy the assertHonestyStamped guardrail — the note's "NOT" is uppercase,
+// while HONESTY_MARKER ("not validation") is a case-sensitive substring check,
+// and assertHonestyStamped only ever looks at an object's `honesty` field, not
+// `note`. Rather than reshaping `note` to match, the result is additionally
+// stamped via honesty.mjs's stampHonesty, which adds a proper `honesty` field
+// alongside the existing `note` (additive, non-breaking).
+
+import { stampHonesty } from "./honesty.mjs";
 
 // ── Numeric helpers (module-private; score.mjs does not export mean/round2) ─
 
@@ -173,7 +184,10 @@ export function calibratePersonas({
     return bh - ah;
   });
 
-  return {
+  // ADDITIVE: stamp a proper `honesty` field alongside the existing `note`
+  // (panelist#81) — see the module header for why `note`'s existing language
+  // doesn't already satisfy assertHonestyStamped.
+  return stampHonesty({
     leaderboard,
     n,
     note:
@@ -181,5 +195,5 @@ export function calibratePersonas({
       "the injected real signal — it is NOT validation and does not make the panel " +
       "equivalent to real user research (see docs/synthetic-persona-best-practices.md §5-6). " +
       "A weak or null correlation is calibration debt to track, not a bug to hide.",
-  };
+  });
 }
