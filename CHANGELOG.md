@@ -236,6 +236,15 @@ takes over.
   `main()`/the CLI runs it — they now say the guardrail is exercised in CI
   by the test suite.
 
+- **`package.json`'s version and `PANELIST_VERSION` could drift silently
+  (#88).** The two are kept in sync by a manual release step
+  (`CONTRIBUTING.md`), but nothing asserted they matched. Added
+  `test/version.test.mjs`, which fails if `src/index.mjs`'s
+  `PANELIST_VERSION` diverges from `package.json`'s `version`. Also removed
+  a stray `// eslint-disable-next-line no-console` in `drift-check.mjs`'s
+  `main()` — the repo has no eslint anywhere, so the directive suppressed a
+  rule no tool evaluates.
+
 ## [0.3.0] - 2026-07-28
 
 **Breaking.** Bumped as a MINOR under pre-1.0 semantics (see above) because it

@@ -119,7 +119,6 @@ export async function scanRepo(packs) {
 /** CLI entry: scan the repo's packs, print, resolve to 0/1. */
 export async function main() {
   const report = await scanRepo();
-  // eslint-disable-next-line no-console
   console.log(formatReport(report));
   return report.ok ? 0 : 1;
 }
