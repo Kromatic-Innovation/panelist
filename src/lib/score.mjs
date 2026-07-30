@@ -49,6 +49,16 @@ const DEFAULT_CUT_THRESHOLD = 5.0;
 const DEFAULT_KILL_FLOOR = 4.0;
 const DEFAULT_CONCURRENCY = 8;
 
+// SCORE_MAX_TOKENS (panelist#85, PAN-09) is deliberately tighter than spawn.mjs's
+// and junction.mjs's DEFAULT_MAX_TOKENS (1024): the scoring plane only needs a
+// small fixed-shape JSON object back (axis scores + a one-line note), while
+// spawn/junction personas produce free-text reactions that can legitimately run
+// longer. This divergence is a PRODUCT DECISION explicitly deferred by #85 — do
+// NOT silently unify the two. Both are now overridable via deps.maxTokens /
+// deps.temperature (see scoreCandidate below); previously they were hardcoded.
+const SCORE_MAX_TOKENS = 512;
+const DEFAULT_TEMPERATURE = 0;
+
 // The neutral score stamped on every axis when the WHOLE panel fails and no
 // custom fallback is supplied. Named here so its collision with
 // DEFAULT_CUT_THRESHOLD (both 5) is visible at the point of definition: a
@@ -309,6 +319,8 @@ function normalizeReportedDenial(entry, reviewer) {
  *   @param {function} [deps.fallback]             whole-panel-failure fallback.
  *   @param {number}   [deps.concurrency]
  *   @param {function} [deps.limiter]
+ *   @param {number}   [deps.maxTokens]     override SCORE_MAX_TOKENS (panelist#85).
+ *   @param {number}   [deps.temperature]   override DEFAULT_TEMPERATURE (panelist#85).
  * @returns {Promise<object>}
  */
 export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
@@ -342,11 +354,13 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
       tasks.push({ persona, panelist, prompt });
     }
   }
+  const maxTokens = deps.maxTokens ?? SCORE_MAX_TOKENS;
+  const temperature = deps.temperature ?? DEFAULT_TEMPERATURE;
   const settled = await Promise.all(
     tasks.map((t) =>
       run(async () => {
         try {
-          return await t.panelist.complete({ prompt: t.prompt, maxTokens: 512, temperature: 0, tools: gate.tools });
+          return await t.panelist.complete({ prompt: t.prompt, maxTokens, temperature, tools: gate.tools });
         } catch {
           return { ok: false, reason: "threw" };
         }
@@ -354,12 +368,22 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     ),
   );
 
+  // failuresByCause (panelist#85, PAN-16) splits WHY a panelist didn't report a
+  // score: "transport" is a client/network-level failure (no usable res.text at
+  // all); "unparsable" is a reply that CAME BACK but extractScore couldn't parse
+  // it — the bucket a maxTokens-truncated reply lands in (a cut-off JSON object
+  // fails to parse). Distinguishing the two is why this counter and PAN-09's
+  // maxTokens knob are fixed together: a caller who sees unparsable failures
+  // climb has a concrete first lever (deps.maxTokens) to try.
+  const failuresByCause = { transport: 0, unparsable: 0 };
+
   for (let i = 0; i < tasks.length; i++) {
     const { persona, panelist } = tasks[i];
     const modelId = panelist.model || "unknown";
     const res = settled[i];
     if (!res || res.ok !== true || typeof res.text !== "string") {
       panelistsFailed++;
+      failuresByCause.transport++;
       continue;
     }
     // Merge the gate's own denials (recorded by gate.check() calls, if the
@@ -373,6 +397,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     const score = extractScore(res.text, norm.axes);
     if (!score) {
       panelistsFailed++;
+      failuresByCause.unparsable++;
       continue;
     }
     const overall = axisMean(score, norm.axes);
@@ -396,7 +421,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     // callback can't accidentally drop the caveat (panelist#81, PAN-03).
     // stampHonesty is idempotent, so the built-in neutralFallback path (already
     // stamped) is unaffected. Same usage resolution neutralFallback uses.
-    return stampHonesty(fb(cand, panelistsFailed, norm), USAGE_HEADER);
+    return stampHonesty(fb(cand, panelistsFailed, norm, { panelSize: tasks.length, failuresByCause }), USAGE_HEADER);
   }
 
   const aggregate = aggregateAxes(byPersona, norm.axes);
@@ -410,6 +435,17 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     verdict: decideVerdict(aggregate, norm),
     crossModel: spansMultipleProviders(Object.keys(byModel)),
     panelistsFailed,
+    // panelSize (panelist#85, PAN-16): total persona x panelist tasks attempted
+    // this run, so a caller can tell "1 of 2 failed" from "1 of 20 failed" — the
+    // failure COUNT alone doesn't carry that context.
+    panelSize: tasks.length,
+    // panelistsReported: how many of those tasks actually produced a usable
+    // score (== byPersona.length). Together with panelSize this answers "how
+    // much of the panel actually reported" without the caller re-deriving it.
+    panelistsReported: byPersona.length,
+    // failuresByCause splits the panelistsFailed total by cause; see the
+    // definition above the loop for what each bucket means.
+    failuresByCause,
     honesty: USAGE_HEADER,
     // Isolation (panelist#72/#77): deny by default. deps.tools lets a caller
     // declare an explicit grant if their panel wraps an agentic/tool-capable
@@ -449,8 +485,16 @@ export function decideVerdict(aggregate, rubric) {
   return "keep";
 }
 
-/** Whole-panel-failure fallback: neutral scores, marked, but fails CLOSED. */
-function neutralFallback(candidate, panelistsFailed, rubric) {
+/**
+ * Whole-panel-failure fallback: neutral scores, marked, but fails CLOSED.
+ * @param {object} candidate
+ * @param {number} panelistsFailed
+ * @param {object} rubric
+ * @param {object} [shape]  panel-shape context threaded from scoreCandidate (panelist#85, PAN-16).
+ *   @param {number} [shape.panelSize]         total tasks attempted this run.
+ *   @param {{transport:number, unparsable:number}} [shape.failuresByCause]  failure breakdown by cause.
+ */
+function neutralFallback(candidate, panelistsFailed, rubric, shape = {}) {
   const norm = normalizeRubric(rubric);
   const s = NEUTRAL_FALLBACK_SCORE;
   const row = {
@@ -475,6 +519,14 @@ function neutralFallback(candidate, panelistsFailed, rubric) {
     verdict: FALLBACK_VERDICT,
     crossModel: false,
     panelistsFailed,
+    // Same shape as the live-panel result (panelist#85, PAN-16): panelSize is
+    // however many tasks were attempted before the whole panel failed;
+    // panelistsReported is always 0 on this path by definition (byPersona was
+    // empty, which is why we're here); failuresByCause carries the breakdown
+    // for this all-failed run instead of a bare total.
+    panelSize: Number.isFinite(shape.panelSize) ? shape.panelSize : panelistsFailed,
+    panelistsReported: 0,
+    failuresByCause: shape.failuresByCause || { transport: panelistsFailed, unparsable: 0 },
     fallback: true,
     honesty: USAGE_HEADER,
     isolation: buildIsolationEnvelope([], []),

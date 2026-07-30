@@ -142,3 +142,75 @@ test("heuristic-fallback path still emits {tools:[],denied:[]} even when deps.to
   assert.equal(res.fallback, true);
   assert.deepEqual(res.isolation, { tools: [], denied: [] });
 });
+
+// ── PAN-09: injectable maxTokens/temperature (panelist#85) ──────────────────
+
+test("scoreCandidate forwards default maxTokens (512) and temperature (0) when deps omits them", async () => {
+  const captured = [];
+  const panel = [capturingScorer("claude-x", GOOD, captured)];
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].maxTokens, 512);
+  assert.equal(captured[0].temperature, 0);
+});
+
+test("scoreCandidate forwards deps.maxTokens/deps.temperature when supplied", async () => {
+  const captured = [];
+  const panel = [capturingScorer("claude-x", GOOD, captured)];
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, maxTokens: 2048, temperature: 0.7 });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].maxTokens, 2048);
+  assert.equal(captured[0].temperature, 0.7);
+});
+
+test("scoreCandidate honors an explicit temperature of 0 (nullish, not falsy, coalescing)", async () => {
+  const captured = [];
+  const panel = [capturingScorer("claude-x", GOOD, captured)];
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, temperature: 0 });
+  assert.equal(captured[0].temperature, 0);
+});
+
+// ── PAN-16: panel-size + diagnosable failure causes (panelist#85) ───────────
+
+test("panelSize and panelistsReported reflect a fully-successful run", async () => {
+  const panel = [fixedScorer("claude-a", GOOD), fixedScorer("gpt-b", GOOD)];
+  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });
+  // 2 personas x 2 panelists = 4 tasks attempted, all reported.
+  assert.equal(res.panelSize, 4);
+  assert.equal(res.panelistsReported, 4);
+  assert.deepEqual(res.failuresByCause, { transport: 0, unparsable: 0 });
+});
+
+test("a mixed panel (dead transport + unparsable reply) splits failuresByCause by cause", async () => {
+  const unparsableClient = {
+    model: "unparsable",
+    async complete() {
+      return { ok: true, text: "not json at all" };
+    },
+  };
+  const panel = [deadClient("dead"), unparsableClient];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  // 1 persona x 2 panelists = 2 tasks; both fail, none reports a usable score,
+  // so this hits the neutralFallback path.
+  assert.equal(res.fallback, true);
+  assert.equal(res.panelSize, 2);
+  assert.equal(res.panelistsReported, 0);
+  assert.deepEqual(res.failuresByCause, { transport: 1, unparsable: 1 });
+  assert.equal(res.panelistsFailed, 2);
+});
+
+test("a partially-failing panel (one good, one dead, one unparsable) reports both live results and the breakdown", async () => {
+  const unparsableClient = {
+    model: "unparsable",
+    async complete() {
+      return { ok: true, text: "not json at all" };
+    },
+  };
+  const panel = [fixedScorer("claude-good", GOOD), deadClient("dead"), unparsableClient];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  assert.equal(res.fallback, undefined);
+  assert.equal(res.panelSize, 3);
+  assert.equal(res.panelistsReported, 1);
+  assert.equal(res.panelistsFailed, 2);
+  assert.deepEqual(res.failuresByCause, { transport: 1, unparsable: 1 });
+});

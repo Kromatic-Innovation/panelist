@@ -98,3 +98,40 @@ test("granting the attempted tool clears the denial (the same client, now permit
   const out = await spawn("drive-by-installer", { mode: "comment", artifact, tools: ["recall"] }, { client });
   assert.deepEqual(out.isolation, { tools: ["recall"], denied: [] });
 });
+
+// ── PAN-09: injectable maxTokens/temperature (panelist#85) ──────────────────
+
+function capturingClient(model, payload, captured) {
+  return {
+    model,
+    async complete(args) {
+      captured.push(args);
+      return { ok: true, text: JSON.stringify(payload), model };
+    },
+  };
+}
+
+test("spawn forwards default maxTokens (1024) and temperature (0) when deps omits them", async () => {
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].maxTokens, 1024);
+  assert.equal(captured[0].temperature, 0);
+});
+
+test("spawn forwards deps.maxTokens/deps.temperature when supplied", async () => {
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await spawn("drive-by-installer", { mode: "comment", artifact }, { client, maxTokens: 256, temperature: 0.9 });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].maxTokens, 256);
+  assert.equal(captured[0].temperature, 0.9);
+});
+
+test("spawn honors an explicit temperature of 0 (nullish coalescing, not falsy)", async () => {
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await spawn("drive-by-installer", { mode: "comment", artifact }, { client, temperature: 0 });
+  assert.equal(captured[0].temperature, 0);
+});

@@ -39,6 +39,15 @@ import { stampHonesty } from "./honesty.mjs";
 
 const MODES = new Set(["vote", "comment", "converse"]);
 
+// DEFAULT_MAX_TOKENS/DEFAULT_TEMPERATURE (panelist#85, PAN-09): named, and now
+// overridable via deps.maxTokens/deps.temperature (see spawn below). 1024 is
+// deliberately looser than score.mjs's SCORE_MAX_TOKENS (512) — spawn produces
+// a free-text persona reaction, not a fixed small JSON score object — a
+// divergence that is a product decision explicitly deferred by #85, not an
+// oversight to unify here.
+const DEFAULT_MAX_TOKENS = 1024;
+const DEFAULT_TEMPERATURE = 0;
+
 /** The default client: refuses to run, forcing an explicit injection. */
 const throwingClient = {
   model: "none",
@@ -141,6 +150,8 @@ function normalizeReportedDenial(entry, reviewer) {
  *   @param {function} [deps.buildPrompt]     override buildSpawnPrompt.
  *   @param {object} [deps.toolGate]          share a gate (createToolGate) across a multi-persona panel
  *     instead of spawn building its own from opts.tools.
+ *   @param {number} [deps.maxTokens]         override DEFAULT_MAX_TOKENS (panelist#85).
+ *   @param {number} [deps.temperature]       override DEFAULT_TEMPERATURE (panelist#85).
  * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] }, honesty: string }>}
  */
 export async function spawn(personaId, opts = {}, deps = {}) {
@@ -162,7 +173,9 @@ export async function spawn(personaId, opts = {}, deps = {}) {
   // opts.tools, defaulting to [] when omitted.
   const gate = deps.toolGate || createToolGate({ tools, reviewer: personaId });
 
-  const res = await client.complete({ prompt, maxTokens: 1024, temperature: 0, tools: gate.tools });
+  const maxTokens = deps.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const temperature = deps.temperature ?? DEFAULT_TEMPERATURE;
+  const res = await client.complete({ prompt, maxTokens, temperature, tools: gate.tools });
   if (!res || res.ok !== true || typeof res.text !== "string") {
     throw new Error(`panelist spawn: client returned no usable text for ${JSON.stringify(personaId)}`);
   }
