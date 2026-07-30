@@ -83,6 +83,20 @@ takes over.
   `maxTokens`-truncated reply lands in). `panelistsFailed` itself is
   unchanged for back-compat; all new fields are additive.
 
+### Changed
+
+- **Broke the `junction.mjs` <-> `junction-schema.mjs` import cycle (#89).**
+  The two modules imported from each other (`junction.mjs` imported
+  `buildTrace`/`normalizeEngagement` from `junction-schema.mjs`, which
+  imported `BAIL` back from `junction.mjs`). It was harmless today only by
+  accident of where the reference sat, and a future module-scope use of
+  either binding would have turned it into a TDZ `ReferenceError` with a
+  misleading stack trace. `BAIL`'s definition now lives in a new leaf
+  module, `src/lib/junction-constants.mjs`, which imports from neither
+  file; `junction.mjs` re-exports `BAIL` from there so `import { BAIL }
+  from "panelist"` (`src/index.mjs`) is unaffected. Pure structural move —
+  no behavior change.
+
 ### Docs
 
 - **README and best-practices doc reconciled with actual cross-model and

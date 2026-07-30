@@ -33,7 +33,7 @@
 // cross-run aggregation helper; the loop that produces the raw turns lives in
 // junction.mjs and imports from here.
 
-import { BAIL } from "./junction.mjs";
+import { BAIL } from "./junction-constants.mjs";
 import { stampHonesty } from "./honesty.mjs";
 
 /** The generic 3-state engagement, engine-owned. Consumers may ignore "skimmed". */

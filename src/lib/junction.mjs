@@ -71,10 +71,12 @@ import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
 import { buildTrace, normalizeEngagement } from "./junction-schema.mjs";
 import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
+import { BAIL } from "./junction-constants.mjs";
 
-// Bail is always an available decision from every junction — the persona can quit
-// anywhere. Reserved id: a graph must not name a junction "bail".
-export const BAIL = "bail";
+// BAIL is defined in the leaf junction-constants.mjs (panelist#89) so both this
+// module and junction-schema.mjs can depend on it without a cycle; re-exported here
+// so `import { BAIL } from "panelist"` (src/index.mjs) keeps working unchanged.
+export { BAIL };
 const BAIL_DECISION = { id: BAIL, label: "Bail — stop here; you've seen enough." };
 
 // Default patience when neither the call nor the graph seeds one. Finite so a run
