@@ -69,7 +69,7 @@
 
 import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
 import { buildTrace, normalizeEngagement } from "./junction-schema.mjs";
-import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
+import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
 import { BAIL } from "./junction-constants.mjs";
 
@@ -107,15 +107,6 @@ function renderPersonaBlock(persona) {
 function reviewerFor(persona) {
   if (persona && typeof persona === "object" && typeof persona.id === "string" && persona.id) return persona.id;
   return "junction";
-}
-
-/** Normalize a client-reported denial entry (string tool id, or {tool, at}) into the locked shape. */
-function normalizeReportedDenial(entry, reviewer) {
-  if (typeof entry === "string") return recordDenial(entry, reviewer);
-  if (entry && typeof entry === "object" && typeof entry.tool === "string") {
-    return recordDenial(entry.tool, reviewer, entry.at);
-  }
-  return null;
 }
 
 /** The forward decisions from a junction PLUS the always-available bail option. */
