@@ -49,6 +49,23 @@ test("whole-panel failure returns the marked neutral fallback", async () => {
   assert.match(res.scores.byPersona[0].note, /HUMAN REVIEW/);
 });
 
+test("whole-panel failure fails CLOSED — the fallback verdict is not a passing 'keep' (panelist#80)", async () => {
+  // The bug: neutralFallback assigned 5 to every axis and DERIVED the verdict,
+  // but 5 === DEFAULT_CUT_THRESHOLD and decideVerdict cuts only on
+  // `overall < cut_threshold`, so a total provider outage returned verdict:"keep"
+  // — the pre-filter passed everything. This is the assertion whose absence hid it.
+  const panel = [deadClient("claude-x"), deadClient("gpt-y")];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  assert.equal(res.fallback, true);
+  assert.notEqual(res.verdict, "keep", "a dead panel must never surface a passing verdict");
+  assert.equal(res.verdict, "cut", "the fallback fails closed to 'cut'");
+  // Independent of the rubric's threshold: even with cut_threshold at the floor
+  // (so a derived 5 would clear it), the pinned verdict must still fail closed.
+  const permissive = { ...RUBRIC, cut_threshold: 0 };
+  const res2 = await score(cand, reviewPack.slice(0, 1), permissive, { panel });
+  assert.equal(res2.verdict, "cut");
+});
+
 test("score() output is auto-stamped with the honesty caveat (panelist#6)", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
   const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });

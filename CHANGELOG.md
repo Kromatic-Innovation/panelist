@@ -11,6 +11,25 @@ MINOR releases (`0.x.0`) may include breaking changes, and PATCH releases
 reaches `1.0.0`, standard semver discipline (breaking changes only on MAJOR)
 takes over.
 
+## [Unreleased]
+
+**Minor under pre-1.0 semantics** — changes an observable verdict.
+
+### Fixed
+
+- **A total panel failure no longer returns a passing verdict (#80).** When
+  every panelist failed, `scoreCandidate` fell back to a neutral 5 on every
+  axis and *derived* the verdict — but the neutral 5 collides with the default
+  `cut_threshold` of 5.0, and `decideVerdict` cuts only on
+  `overall < cut_threshold`, so a total provider outage returned
+  `verdict: "keep"`. A programmatic gate (`if (result.verdict === "keep")
+  publish()`) therefore published everything during an outage. The
+  neutral-fallback verdict is now pinned to `"cut"` (fail-closed) rather than
+  derived; the neutral scores and the "REQUIRES HUMAN REVIEW" note are still
+  reported for human context. The magic `5` is now the named constant
+  `NEUTRAL_FALLBACK_SCORE`, defined next to `DEFAULT_CUT_THRESHOLD` so the
+  collision is visible at the point of definition.
+
 ## [0.3.0] - 2026-07-28
 
 **Breaking.** Bumped as a MINOR under pre-1.0 semantics (see above) because it
