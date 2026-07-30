@@ -81,6 +81,14 @@ const BAIL_DECISION = { id: BAIL, label: "Bail — stop here; you've seen enough
 // can always terminate even if the persona never bails and the graph has a cycle.
 const DEFAULT_PATIENCE = 12;
 
+// DEFAULT_MAX_TOKENS/DEFAULT_TEMPERATURE (panelist#85, PAN-09): named, and now
+// overridable via opts.maxTokens/opts.temperature (see runJunctionLoop below).
+// Matches spawn.mjs's 1024 default (a free-text persona turn, not score.mjs's
+// tighter fixed-shape JSON score object) — see spawn.mjs's comment for why that
+// divergence from score.mjs is deliberate and out of scope to unify here.
+const DEFAULT_MAX_TOKENS = 1024;
+const DEFAULT_TEMPERATURE = 0;
+
 /** Resolve a junction's content lazily, keyed off the current run state. */
 function resolveContent(junction, state) {
   const c = junction.content;
@@ -225,6 +233,8 @@ function parseReply(text) {
  *     is fully isolated by default, same posture as spawn. No wildcards; see isolation.mjs.
  *   @param {object} [opts.toolGate]  share a gate (isolation.mjs's createToolGate) across several calls
  *     instead of runJunctionLoop building its own from opts.tools.
+ *   @param {number} [opts.maxTokens]     override DEFAULT_MAX_TOKENS (panelist#85).
+ *   @param {number} [opts.temperature]   override DEFAULT_TEMPERATURE (panelist#85).
  * @param {object} [hooks]
  *   @param {(trace:object)=>any} [hooks.onComplete]  consumer verdict hook: invoked ONCE with the finished
  *                                                    generic trace (see junction-schema.mjs) so a consumer can
@@ -247,7 +257,7 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   if (!graph || typeof graph.junctions !== "object" || graph.junctions == null) {
     throw new Error("panelist junction: graph must be { junctions: {...}, entry }.");
   }
-  const { horizon, spawnStrategy = "persistent", client, patienceBudget, tools, toolGate } = opts;
+  const { horizon, spawnStrategy = "persistent", client, patienceBudget, tools, toolGate, maxTokens, temperature } = opts;
   const render = RENDERERS[spawnStrategy];
   if (!render) {
     throw new Error(`panelist junction: spawnStrategy must be one of ${Object.keys(RENDERERS).join("|")} (got ${JSON.stringify(spawnStrategy)})`);
@@ -304,7 +314,12 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
     budget -= cost;
     turn += 1;
     const prompt = render({ personaBlock, horizon, history: transcript, view });
-    const res = await client.complete({ prompt, maxTokens: 1024, temperature: 0, tools: gate.tools });
+    const res = await client.complete({
+      prompt,
+      maxTokens: maxTokens ?? DEFAULT_MAX_TOKENS,
+      temperature: temperature ?? DEFAULT_TEMPERATURE,
+      tools: gate.tools,
+    });
     if (!res || res.ok !== true || typeof res.text !== "string") {
       throw new Error(`panelist junction: client returned no usable text at junction ${JSON.stringify(current)}.`);
     }

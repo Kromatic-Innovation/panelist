@@ -321,3 +321,44 @@ test("isolation is present on every early-return/bail path: bail, budget-exhaust
     assert.equal(out.isolation.denied.length, 1);
   }
 });
+
+// ── PAN-09: injectable maxTokens/temperature (panelist#85) ──────────────────
+
+/** A scripted client that also captures the full args of every complete() call. */
+function capturingScriptedClient(responses, captured) {
+  let i = 0;
+  return {
+    model: "scripted-capturing",
+    async complete(args) {
+      captured.push(args);
+      const r = responses[i] ?? { reaction: "(exhausted script)", decision: BAIL };
+      i += 1;
+      return { ok: true, text: JSON.stringify(r), model: "scripted-capturing" };
+    },
+  };
+}
+
+test("runJunctionLoop forwards default maxTokens (1024) and temperature (0) when opts omits them", async () => {
+  const captured = [];
+  const client = capturingScriptedClient([{ reaction: "seen enough", decision: BAIL }], captured);
+  await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].maxTokens, 1024);
+  assert.equal(captured[0].temperature, 0);
+});
+
+test("runJunctionLoop forwards opts.maxTokens/opts.temperature when supplied", async () => {
+  const captured = [];
+  const client = capturingScriptedClient([{ reaction: "seen enough", decision: BAIL }], captured);
+  await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client, maxTokens: 300, temperature: 0.5 });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].maxTokens, 300);
+  assert.equal(captured[0].temperature, 0.5);
+});
+
+test("runJunctionLoop honors an explicit temperature of 0 (nullish coalescing, not falsy)", async () => {
+  const captured = [];
+  const client = capturingScriptedClient([{ reaction: "seen enough", decision: BAIL }], captured);
+  await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client, temperature: 0 });
+  assert.equal(captured[0].temperature, 0);
+});

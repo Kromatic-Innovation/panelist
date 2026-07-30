@@ -15,6 +15,29 @@ takes over.
 
 **Minor under pre-1.0 semantics** — changes an observable verdict.
 
+### Added
+
+- **`maxTokens`/`temperature` are now injectable, and scoring/spawn/junction
+  failures are diagnosable (#85).** The three model-call sites
+  (`score.mjs`'s `scoreCandidate`, `spawn.mjs`'s `spawn`, `junction.mjs`'s
+  `runJunctionLoop`) previously hardcoded `maxTokens`/`temperature`,
+  divergently (512 vs. 1024) and non-overridably. All three now read
+  `deps.maxTokens ?? <named default>` / `deps.temperature ?? <named
+  default>` (nullish coalescing, so an explicit `0` is honored), defaulting
+  to today's values — `SCORE_MAX_TOKENS = 512` on the scoring plane,
+  `DEFAULT_MAX_TOKENS = 1024` on spawn/junction, `DEFAULT_TEMPERATURE = 0`
+  everywhere. The 512-vs-1024 divergence is preserved and documented
+  in-line, not silently unified — whether the two planes should converge is
+  a separate product decision this issue explicitly defers.
+  Additionally, `scoreCandidate`'s result (both the live-panel path and the
+  `neutralFallback` path) now carries `panelSize` (total persona x panelist
+  tasks attempted), `panelistsReported` (how many produced a usable score),
+  and `failuresByCause: { transport, unparsable }` — a breakdown of the
+  existing `panelistsFailed` total that distinguishes a transport-level
+  failure from a reply that came back but didn't parse (the bucket a
+  `maxTokens`-truncated reply lands in). `panelistsFailed` itself is
+  unchanged for back-compat; all new fields are additive.
+
 ### Security
 
 - **OSS "go-public" workflow gates revisited against live platform behavior
