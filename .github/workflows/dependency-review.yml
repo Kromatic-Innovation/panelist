@@ -4,11 +4,15 @@ name: Dependency Review
 # — it's here as a gate against any future dependency introducing a known
 # vulnerability or an unacceptable license.
 #
-# ADVISORY until go-public: the dependency-review API requires the GitHub
-# dependency graph, which on a PRIVATE repo needs GitHub Advanced Security.
-# Until panelist is public (the OSS release gate), the action can return 403, so
-# the step is marked continue-on-error to avoid a spurious red check on a
-# zero-dependency repo. Flip continue-on-error off when the repo goes public.
+# STILL ADVISORY — but NOT because the repo is private (it is public now).
+# panelist#84 dropped continue-on-error and observed (2026-07-30) that the
+# dependency-review API still hard-fails with: "Dependency review is not
+# supported on this repository. Please ensure that Dependency graph is enabled"
+# — the Dependency graph feature is not enabled for this repo, and enabling it
+# requires repo/org ADMIN (unavailable to the automation that opened #84).
+# continue-on-error is retained so this doesn't paint every PR red. Drop it once
+# an admin enables Dependency graph (Settings → Code security). Tracked as a
+# follow-up to #84.
 
 on:
   pull_request:

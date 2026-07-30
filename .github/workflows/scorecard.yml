@@ -3,11 +3,16 @@ name: Scorecard
 # OpenSSF Scorecard. Runs on push to develop (the default branch) and on a
 # weekly schedule — deliberately NOT on pull_request, so it never gates a PR.
 #
-# ADVISORY until go-public: Scorecard's publish_results and the code-scanning
-# SARIF upload need a PUBLIC repo (and/or GitHub Advanced Security) to succeed.
-# While panelist is private, publish_results is false and the private-only steps
-# are continue-on-error so this never leaves a red run on develop. At the OSS
-# go-public gate: set publish_results: true and drop the continue-on-error.
+# The repo is public, so Scorecard's publish_results (the point of running
+# Scorecard on a public OSS project — it publishes the rating) and the
+# code-scanning SARIF upload both work. publish_results is true and the steps
+# hard-fail rather than being continue-on-error, so a broken run is visible
+# instead of silently green (panelist#84).
+#
+# NB (observed while flipping in #84): scorecard-action only runs on the DEFAULT
+# branch — a workflow_dispatch on a feature branch fails with "Only the default
+# branch develop is supported". That is why this flip is verified by the
+# push-to-develop run after merge, not on the PR (Scorecard never runs on a PR).
 
 on:
   push:
@@ -36,16 +41,13 @@ jobs:
 
       - name: Run analysis
         uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
-        continue-on-error: true
         with:
           results_file: results.sarif
           results_format: sarif
-          # false while private; flip to true at the OSS go-public gate.
-          publish_results: false
+          publish_results: true
 
       - name: Upload SARIF results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        continue-on-error: true
         with:
           name: SARIF file
           path: results.sarif
@@ -53,6 +55,5 @@ jobs:
 
       - name: Upload to code-scanning
         uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
-        continue-on-error: true
         with:
           sarif_file: results.sarif

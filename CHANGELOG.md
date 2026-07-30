@@ -17,6 +17,30 @@ takes over.
 
 ### Security
 
+- **OSS "go-public" workflow gates revisited against live platform behavior
+  (#84).** Both `dependency-review.yml` and `scorecard.yml` carried in-file
+  instructions to flip a setting "at the OSS go-public gate"; the repo is
+  public and published (`0.3.0` on npm) but the flips were never made. Both
+  were attempted and **observed** (2026-07-30), since third-party platform
+  behavior must be checked, not recalled:
+  - `scorecard.yml` — **flipped.** `publish_results: true` (publishing the
+    OpenSSF rating is the point of running Scorecard on a public project) and
+    `continue-on-error` dropped on all three steps, so a broken run is visible
+    rather than silently green. Scorecard runs only on the default branch, so
+    this is verified by the push-to-`develop` run after merge (it does not run
+    on PRs by design).
+  - `dependency-review.yml` — **could not be flipped; kept advisory with an
+    accurate reason.** Dropping `continue-on-error` was observed to hard-fail
+    with *"Dependency review is not supported on this repository. Please ensure
+    that Dependency graph is enabled"* — the Dependency graph feature is not
+    enabled for this repo, and enabling it requires repo/org **admin**
+    (unavailable to the automation). `continue-on-error` is retained so it
+    doesn't paint every PR red; a follow-up issue tracks the admin action to
+    enable Dependency graph, after which the flip completes.
+  - The stale "ADVISORY until go-public" comments in both files were replaced
+    with comments describing the *actual* current state, so they no longer
+    mislead the next reader into thinking the repo is private.
+
 - **An untrusted artifact could break out of its `"""` fence and inject
   content into the prompt (#82).** All three prompt builders
   (`buildEvalPrompt` in `score.mjs`, `buildSpawnPrompt` in `spawn.mjs`, and
