@@ -239,6 +239,12 @@ test("aggregateJunctionTraces rolls up drop-off + per-junction engagement withou
 });
 
 test("aggregateJunctionTraces tolerates an empty batch and null entries", () => {
-  assert.deepEqual(aggregateJunctionTraces([]), { runs: 0, dropOff: {}, perJunction: {} });
-  assert.deepEqual(aggregateJunctionTraces([null]), { runs: 0, dropOff: {}, perJunction: {} });
+  // The rollup is honesty-stamped (panelist#81), so compare everything except
+  // that field explicitly rather than a full-object deepEqual.
+  const { honesty: h1, ...empty } = aggregateJunctionTraces([]);
+  const { honesty: h2, ...nulled } = aggregateJunctionTraces([null]);
+  assert.deepEqual(empty, { runs: 0, dropOff: {}, perJunction: {} });
+  assert.deepEqual(nulled, { runs: 0, dropOff: {}, perJunction: {} });
+  assert.equal(typeof h1, "string");
+  assert.equal(typeof h2, "string");
 });

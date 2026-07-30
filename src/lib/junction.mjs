@@ -70,6 +70,7 @@
 import { renderPersona, extractJsonObject } from "./score.mjs";
 import { buildTrace, normalizeEngagement } from "./junction-schema.mjs";
 import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
+import { stampHonesty } from "./honesty.mjs";
 
 // Bail is always an available decision from every junction — the persona can quit
 // anywhere. Reserved id: a graph must not name a junction "bail".
@@ -359,5 +360,8 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   const trace = buildTrace(result);
   const verdict = typeof hooks.onComplete === "function" ? await hooks.onComplete(trace) : null;
 
-  return { ...result, trace, verdict };
+  // Stamp the ENVELOPE (this top-level result), NOT the trace — the trace's
+  // per-turn reactions and key set are locked (REACTION_KEYS/TRACE_KEYS,
+  // junction-schema.mjs) and must never carry an honesty field (panelist#81).
+  return stampHonesty({ ...result, trace, verdict });
 }

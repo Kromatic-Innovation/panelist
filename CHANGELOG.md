@@ -17,6 +17,46 @@ takes over.
 
 ### Fixed
 
+- **The honesty caveat is now auto-stamped on every public output surface,
+  not just some of them (#81).** An audit found 8 public surfaces that did
+  not carry the `honesty` field despite the docs/README claiming "every
+  panel output auto-stamps the caveat":
+  - `score()`/`scoreCandidate()` with a custom `deps.fallback` — the
+    caller's callback replaced the built-in `neutralFallback` wholesale,
+    losing the stamp. The call site now post-processes the callback's
+    return through `stampHonesty` (idempotent, so the built-in fallback
+    path is unaffected).
+  - `rankCandidatesWith()` — the inner per-candidate `.evaluation` objects
+    were already stamped, but the returned `{ shortlist, cut }` wrapper
+    (the actual cut-list product) was not. Now stamped.
+  - `spawn()` — the returned invocation-contract wrapper is now stamped.
+    `runPersona()` (`runner.mjs`) delegates to `spawn` unmodified, so it
+    inherits the stamp.
+  - `runJunctionLoop()` — the returned top-level envelope is now stamped.
+    The nested `trace` (and its per-turn reactions) is deliberately left
+    UNstamped: its key set is locked (`REACTION_KEYS`/`TRACE_KEYS`,
+    `junction-schema.mjs`) and consumers assert it exactly.
+  - `aggregateJunctionTraces()` — the returned rollup object is now
+    stamped.
+  - `calibratePersonas()` — the result already carried honesty *language*
+    in its `note` field, but not a `honesty` field, and the note's "NOT
+    validation" (uppercase) didn't match the case-sensitive
+    `HONESTY_MARKER` ("not validation"). Rather than reshaping `note`, an
+    `honesty` field is now added additively via `stampHonesty`.
+  - `score()`'s default path and its built-in `neutralFallback` were
+    already correctly stamped and are unchanged.
+
+  Added a table-driven test (`test/honesty-surfaces.test.mjs`) that runs
+  every one of these surfaces offline and asserts
+  `assertHonestyStamped(result).ok === true`, so a future surface added
+  without a stamp fails CI. The junction trace's un-stamped status and the
+  locked `TRACE_KEYS`/`REACTION_KEYS` are also asserted there. Also updated
+  all three copies of the `spawn` response-wrapper contract
+  (`docs/invocation-contract.md`, `.claude/agents/persona.md`,
+  `src/lib/spawn.mjs`'s JSDoc) to include the `honesty` field, and rewrote
+  `docs/invocation-contract.md`'s "Forward-compat" note (previously said
+  the stamp was "not yet added") to describe the now-shipped behavior.
+
 - **A total panel failure no longer returns a passing verdict (#80).** When
   every panelist failed, `scoreCandidate` fell back to a neutral 5 on every
   axis and *derived* the verdict — but the neutral 5 collides with the default

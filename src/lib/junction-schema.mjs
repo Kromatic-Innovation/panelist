@@ -34,6 +34,7 @@
 // junction.mjs and imports from here.
 
 import { BAIL } from "./junction.mjs";
+import { stampHonesty } from "./honesty.mjs";
 
 /** The generic 3-state engagement, engine-owned. Consumers may ignore "skimmed". */
 export const ENGAGEMENT = Object.freeze({ KEPT: "kept", SKIMMED: "skimmed", BAILED: "bailed" });
@@ -138,5 +139,9 @@ export function aggregateJunctionTraces(traces = []) {
       if (r.engagement in bucket && r.engagement !== "visits") bucket[r.engagement] += 1;
     }
   }
-  return { runs: traces.filter(Boolean).length, dropOff, perJunction };
+  // Stamp the returned rollup — it's a public output surface in its own right
+  // (panelist#81), distinct from the per-run traces it aggregates (which stay
+  // unstamped; only the top-level runJunctionLoop envelope is stamped, not the
+  // trace — see junction.mjs).
+  return stampHonesty({ runs: traces.filter(Boolean).length, dropOff, perJunction });
 }

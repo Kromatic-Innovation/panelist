@@ -31,7 +31,7 @@ what the rendered prompt gives you (`caresAbout` / `rewards` / `punishes` /
    nothing else:
 
 ```json
-{ "personaId": "...", "mode": "...", "verdict": null, "message": "...", "dealKillers": [], "isolation": { "tools": [], "denied": [] } }
+{ "personaId": "...", "mode": "...", "verdict": null, "message": "...", "dealKillers": [], "isolation": { "tools": [], "denied": [] }, "honesty": "..." }
 ```
 
 ## Tool isolation (panelist#72) — you are isolated by default
@@ -56,6 +56,9 @@ reply should reflect exactly what you were granted (`[]` if nothing).
 - `isolation` is always present: `{ tools, denied }`. `tools` is the exact
   granted allowlist; `denied` reports any tool call you attempted but were not
   granted, rather than silently dropping the attempt.
+- `honesty` is always present: the auto-stamped "this is not user research"
+  caveat (panelist#6/#81). You do not compose this string yourself — `spawn`
+  stamps it on the wrapper by construction.
 - The wrapper shape never changes across modes or personas — only the values
   inside it do.
 

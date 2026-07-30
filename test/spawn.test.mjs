@@ -20,7 +20,8 @@ test("vote with a responseSchema fills verdict and returns a well-formed wrapper
     dealKillers: [],
   });
   const out = await spawn("drive-by-installer", { mode: "vote", artifact, instruction: "Would you try it?", responseSchema: VOTE_SCHEMA }, { client });
-  assert.deepEqual(Object.keys(out).sort(), ["dealKillers", "isolation", "message", "mode", "personaId", "verdict"]);
+  // honesty is auto-stamped on the wrapper (panelist#81).
+  assert.deepEqual(Object.keys(out).sort(), ["dealKillers", "honesty", "isolation", "message", "mode", "personaId", "verdict"]);
   assert.equal(out.personaId, "drive-by-installer");
   assert.equal(out.mode, "vote");
   assert.deepEqual(out.verdict, { decision: "approve" });

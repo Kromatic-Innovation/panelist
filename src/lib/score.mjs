@@ -41,6 +41,7 @@
 
 import { USAGE_HEADER } from "./schema.mjs";
 import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
+import { stampHonesty } from "./honesty.mjs";
 
 const DEFAULT_AXES = ["resonance", "clarity", "credibility", "scrollStop"];
 const DEFAULT_CUT_THRESHOLD = 5.0;
@@ -361,7 +362,12 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
 
   if (byPersona.length === 0) {
     const fb = deps.fallback || neutralFallback;
-    return fb(cand, panelistsFailed, norm);
+    // A custom deps.fallback replaces neutralFallback wholesale, including its
+    // honesty stamp — post-process through stampHonesty here so the caller's
+    // callback can't accidentally drop the caveat (panelist#81, PAN-03).
+    // stampHonesty is idempotent, so the built-in neutralFallback path (already
+    // stamped) is unaffected. Same usage resolution neutralFallback uses.
+    return stampHonesty(fb(cand, panelistsFailed, norm), USAGE_HEADER);
   }
 
   const aggregate = aggregateAxes(byPersona, norm.axes);
@@ -476,10 +482,17 @@ export async function rankCandidatesWith(candidates, personas, rubric, deps = {}
     e.rank = i + 1;
   });
 
-  return {
-    shortlist: evaluated.filter((e) => e.evaluation.verdict === "keep"),
-    cut: evaluated.filter((e) => e.evaluation.verdict === "cut"),
-  };
+  // The inner per-candidate `.evaluation` objects are already stamped (score()
+  // above), but the returned { shortlist, cut } wrapper is itself a public
+  // output surface — the cut-list product — so it gets its own stamp too
+  // (panelist#81).
+  return stampHonesty(
+    {
+      shortlist: evaluated.filter((e) => e.evaluation.verdict === "keep"),
+      cut: evaluated.filter((e) => e.evaluation.verdict === "cut"),
+    },
+    USAGE_HEADER,
+  );
 }
 
 // ── Numeric helpers ──────────────────────────────────────────────────────────
