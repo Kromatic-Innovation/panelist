@@ -97,6 +97,18 @@ takes over.
   `NEUTRAL_FALLBACK_SCORE`, defined next to `DEFAULT_CUT_THRESHOLD` so the
   collision is visible at the point of definition.
 
+- **CI now actually runs `npm run drift`, matching what CONTRIBUTING.md
+  claimed all along (#83).** `CONTRIBUTING.md` asserted CI runs both
+  `npm test` and `npm run drift` and gates on both, but `ci.yml` only ran
+  `node --test test/*.test.mjs` — the drift check (`src/lib/drift-check.mjs`,
+  a real CLI that resolves `process.exit(1)` on failure) was wired into
+  `package.json` but invoked by no workflow, so a drifted/invalid persona
+  record could merge without CI ever noticing. Added `npm run drift` as a
+  second step in the same CI job. Added a test
+  (`test/drift.test.mjs`) that constructs a deliberately-broken record and
+  asserts `scanRepo` reports `ok: false` for it, proving the gate actually
+  fails on drift rather than always exiting 0.
+
 ## [0.3.0] - 2026-07-28
 
 **Breaking.** Bumped as a MINOR under pre-1.0 semantics (see above) because it
