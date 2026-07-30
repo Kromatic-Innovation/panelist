@@ -14,8 +14,12 @@
 // runner (runner.mjs / D5), identity is rendered LIVE from the register at
 // call time, so there is no second static copy to drift against there.
 // Instead this module KEEPS its record-schema validation role and GAINS one
-// new guardrail: checkHonesty, which proves no panel summary/envelope omits
-// the honesty caveat (honesty.mjs).
+// new guardrail: checkHonesty, which reports which panel summaries/envelopes
+// in a batch omit the honesty caveat (honesty.mjs). checkHonesty is NOT
+// called by this module's own main()/scanRepo (those scan repo records, not
+// panel summaries, and `npm run drift` does not exercise it) — it is invoked
+// in CI by test/honesty-gate.test.mjs over real plane outputs, which is
+// where the "no summary omits the caveat" guarantee actually gets checked.
 
 import { validatePersona } from "./schema.mjs";
 import { assertHonestyStamped } from "./honesty.mjs";
