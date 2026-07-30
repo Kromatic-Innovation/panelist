@@ -128,6 +128,34 @@ Packs are exported but **nothing auto-registers** — a consumer opts in explici
 
 These are **examples**. Real, private persona rosters live in their owner's repo and register at runtime; they are never shipped here.
 
+## Eval: contract conformance (manual, spends tokens)
+
+`eval/contract-conformance.mjs` is a **manually-triggered** harness that answers one
+narrow question: does panelist's **default** prompt reliably produce output that
+panelist's **own parser** can consume, on every model panelist claims to support? It
+checks **parseability only** — not persona/verdict quality — across the scoring,
+single-turn (`comment`/`vote`), and multi-turn (`runJunctionLoop`) planes, plus a
+zero-cost check that `providerOf()` still buckets each model id correctly (the guard
+behind the `crossModel` guarantee).
+
+It calls real provider APIs and **spends real tokens**, so it is intentionally kept
+out of both `npm test` (it lives under `eval/`, not `test/`, so `node --test
+test/*.test.mjs` never picks it up) and CI (the matching workflow is
+`workflow_dispatch`-only — see `.github/workflows/eval-contract-conformance.yml`). It
+must never become a required check.
+
+Run it:
+
+- **Manually via GitHub Actions** — dispatch the "Eval - Contract Conformance"
+  workflow (requires the maintainer to have provisioned `ANTHROPIC_API_KEY` /
+  `OPENAI_API_KEY` via 1Password first; see the workflow file's header comment).
+- **Locally** — `ANTHROPIC_API_KEY=... OPENAI_API_KEY=... node eval/contract-conformance.mjs`
+  (a provider with no key set is skipped with a clear message, not treated as a
+  failure).
+
+Run it when adding a new provider, or upgrading/retiring a model id in the supported
+lineup. See [`eval/README.md`](eval/README.md) for the full matrix shape and details.
+
 ## Status
 
 Early. Developed internally, then open sourced. Apache-2.0.

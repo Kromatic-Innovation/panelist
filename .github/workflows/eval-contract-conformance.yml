@@ -1,0 +1,54 @@
+name: Eval - Contract Conformance
+
+# MANUAL ONLY. This workflow spends real tokens against real provider APIs
+# (Anthropic + OpenAI) to check that panelist's DEFAULT prompts produce
+# output panelist's OWN parsers can consume, on every model panelist claims
+# to support (panelist#95). It does NOT evaluate verdict/persona quality —
+# only the parse contract. It must NEVER run on push or pull_request, and it
+# must NEVER be added as a required check — workflow_dispatch only.
+#
+# Credential provisioning (maintainer action required):
+#   The `op://` references below are PLACEHOLDERS — the exact 1Password vault
+#   layout is not knowable from this workflow file. A maintainer must:
+#     1. Create `anthropic-api-key` and `openai-api-key` items in the
+#        appropriate vault (adjust the vault name below if `Infrastructure`
+#        is not correct for provider API keys).
+#     2. Confirm the `OP_SERVICE_ACCOUNT_TOKEN` repo secret (already used by
+#        promote-main.yml) has read access to that vault.
+#     3. Update the `op://` paths below if the item/field names differ.
+#   See eval/README.md and the README.md eval section for the full run guide.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  contract-conformance:
+    name: Contract Conformance (manual eval — spends tokens)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+
+      # Same 1password/load-secrets-action + OP_SERVICE_ACCOUNT_TOKEN pattern
+      # as .github/workflows/promote-main.yml — mirrored in shape. Maintainer
+      # must set the actual vault item paths (see the header comment above)
+      # and the OP_SERVICE_ACCOUNT_TOKEN repo secret.
+      - name: Load provider API keys from 1Password
+        uses: 1password/load-secrets-action@v4
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          ANTHROPIC_API_KEY: op://Infrastructure/anthropic-api-key/credential
+          OPENAI_API_KEY: op://Infrastructure/openai-api-key/credential
+
+      - name: Run contract-conformance eval
+        run: node eval/contract-conformance.mjs
