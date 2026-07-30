@@ -17,6 +17,23 @@ takes over.
 
 ### Added
 
+- **New manual eval: contract conformance across supported models (#95).**
+  `eval/contract-conformance.mjs` is a manually-triggered (never CI, never a
+  required check) harness that checks whether panelist's DEFAULT prompts
+  (`buildEvalPrompt`, `buildSpawnPrompt`, the junction loop's `CONTRACT`)
+  reliably produce output panelist's OWN parsers (`extractScore`,
+  `extractJsonObject`) can consume, across all 6 models panelist claims to
+  support (3 Anthropic, 3 OpenAI) and all 4 execution planes (scoring,
+  single-turn comment, single-turn vote+schema, multi-turn junction). It also
+  asserts `providerOf()` buckets every model id correctly (the guard behind
+  the `crossModel` guarantee) with no API call required. Parseability only —
+  not verdict/persona quality. Zero added dependency: provider calls use
+  Node 20's built-in `fetch` directly, no SDK. Lives under `eval/`, not
+  `test/` or `package.json`'s `files`, so it never runs via `npm test` and is
+  never published. Triggered via `.github/workflows/eval-contract-conformance.yml`
+  (`workflow_dispatch` only). See the new "Eval: contract conformance"
+  README section and `eval/README.md`.
+
 - **`maxTokens`/`temperature` are now injectable, and scoring/spawn/junction
   failures are diagnosable (#85).** The three model-call sites
   (`score.mjs`'s `scoreCandidate`, `spawn.mjs`'s `spawn`, `junction.mjs`'s
