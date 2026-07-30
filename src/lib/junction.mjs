@@ -67,7 +67,7 @@
 // Pure, zero-dep beyond existing helpers (renderPersona, extractJsonObject) and the
 // co-located schema builder (buildTrace, normalizeEngagement).
 
-import { renderPersona, extractJsonObject } from "./score.mjs";
+import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
 import { buildTrace, normalizeEngagement } from "./junction-schema.mjs";
 import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
@@ -119,15 +119,19 @@ function decisionsFor(junction, state) {
  * available from it. This is the ONLY place a junction's content enters a prompt,
  * and it is only ever called for the CURRENT junction, so the barrier is structural.
  *
+ * Exported (minimal surface, panelist#82) so tests can assert the fence
+ * built here is unbreakable without threading a full graph through
+ * runJunctionLoop + a capturing mock client.
+ *
  * @returns {{ content: string, decisions: {id,label}[], text: string }}
  */
-function renderJunctionView(junction, state) {
+export function renderJunctionView(junction, state) {
   const content = resolveContent(junction, state);
   const decisions = decisionsFor(junction, state);
   const menu = decisions.map((d) => `  - ${d.id}: ${d.label}`).join("\n");
   const text = [
     "CURRENT JUNCTION:",
-    `"""${content}"""`,
+    fenceArtifact(content),
     "",
     "YOUR AVAILABLE DECISIONS (choose exactly one by its id):",
     menu,

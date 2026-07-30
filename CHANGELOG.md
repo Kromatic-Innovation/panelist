@@ -15,6 +15,33 @@ takes over.
 
 **Minor under pre-1.0 semantics** — changes an observable verdict.
 
+### Security
+
+- **An untrusted artifact could break out of its `"""` fence and inject
+  content into the prompt (#82).** All three prompt builders
+  (`buildEvalPrompt` in `score.mjs`, `buildSpawnPrompt` in `spawn.mjs`, and
+  the current-junction view in `junction.mjs`) fenced untrusted artifact/
+  content text with a raw, unescaped `` `"""${text}"""` `` interpolation.
+  An artifact whose own text contained `"""` could close that fence early,
+  and whatever followed would flow past the intended containment as if it
+  were prompt scaffold rather than untrusted input. On the SCORE plane this
+  was the worst case: injected axis JSON placed right after the broken
+  fence reaches `extractScore`/`decideVerdict` with no caller-side
+  validation point, so a crafted artifact could forge its own score and
+  flip a `cut` verdict to `keep`.
+
+  Added `fenceArtifact(text)` (`score.mjs`, exported alongside
+  `renderPersona`/`extractJsonObject` for `spawn.mjs`/`junction.mjs` to
+  import) that neutralizes any internal run of 3-or-more `"` characters
+  (inserting a zero-width space between each) before wrapping the text in
+  `"""` fences — deterministic, visually lossless, and guarantees the only
+  `"""` substrings in the built prompt are the two intended fences. All
+  three call sites now go through the shared helper. Added
+  `test/fence-injection.test.mjs` with a regression test per call site
+  (score/spawn/junction) plus a test specifically asserting the injected
+  axis JSON on the score plane cannot reach the reply-parsing path as if it
+  were the model's own output.
+
 ### Fixed
 
 - **The honesty caveat is now auto-stamped on every public output surface,
