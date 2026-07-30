@@ -85,6 +85,19 @@ takes over.
 
 ### Changed
 
+- **De-duplicated `normalizeReportedDenial` across the three execution
+  planes (#90).** `score.mjs`, `spawn.mjs`, and `junction.mjs` each defined
+  an identical private `normalizeReportedDenial(entry, reviewer)` helper
+  that normalizes a client-reported denial (a bare tool-id string, or a
+  `{ tool, at }` object) into the locked `isolation.denied[]` shape via
+  `recordDenial`. It now has one implementation, exported from
+  `src/lib/isolation.mjs` alongside `recordDenial`/`createToolGate`/
+  `buildIsolationEnvelope`; all three planes import it instead of defining
+  their own copy. Reviewer attribution is unchanged and still differs per
+  plane at the call site (`persona.id` in score, `personaId` in spawn,
+  `reviewerFor(persona)` in junction). Pure structural move — no behavior
+  change.
+
 - **Broke the `junction.mjs` <-> `junction-schema.mjs` import cycle (#89).**
   The two modules imported from each other (`junction.mjs` imported
   `buildTrace`/`normalizeEngagement` from `junction-schema.mjs`, which

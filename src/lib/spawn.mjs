@@ -34,7 +34,7 @@
 
 import { getPersona } from "./register.mjs";
 import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
-import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
+import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
 
 const MODES = new Set(["vote", "comment", "converse"]);
@@ -122,15 +122,6 @@ export function buildSpawnPrompt({ persona, mode, artifact, instruction, respons
 function normalizeDealKillers(v) {
   if (!Array.isArray(v)) return [];
   return v.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim());
-}
-
-/** Normalize a client-reported denial entry (string tool id, or {tool, at}) into the locked shape. */
-function normalizeReportedDenial(entry, reviewer) {
-  if (typeof entry === "string") return recordDenial(entry, reviewer);
-  if (entry && typeof entry === "object" && typeof entry.tool === "string") {
-    return recordDenial(entry.tool, reviewer, entry.at);
-  }
-  return null;
 }
 
 /**

@@ -130,6 +130,23 @@ export function createToolGate({ tools, reviewer } = {}) {
   };
 }
 
+/**
+ * Normalize a client-reported denial entry — a bare tool-id string, or a
+ * `{ tool, at }` object — into the locked `isolation.denied[]` shape via
+ * recordDenial. Shared by score.mjs, spawn.mjs, and junction.mjs, which
+ * differ only in the reviewer string their call sites pass.
+ * @param {string|{tool: string, at?: string}} entry
+ * @param {string} reviewer
+ * @returns {object|null}
+ */
+export function normalizeReportedDenial(entry, reviewer) {
+  if (typeof entry === "string") return recordDenial(entry, reviewer);
+  if (entry && typeof entry === "object" && typeof entry.tool === "string") {
+    return recordDenial(entry.tool, reviewer, entry.at);
+  }
+  return null;
+}
+
 /** Build the locked `isolation` envelope shape: `{ tools, denied }`. */
 export function buildIsolationEnvelope(effectiveTools, denied) {
   return {

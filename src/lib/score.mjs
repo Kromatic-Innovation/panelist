@@ -41,7 +41,7 @@
 // ── Rubric normalization ────────────────────────────────────────────────────
 
 import { USAGE_HEADER } from "./schema.mjs";
-import { createToolGate, buildIsolationEnvelope, recordDenial } from "./isolation.mjs";
+import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
 
 const DEFAULT_AXES = ["resonance", "clarity", "credibility", "scrollStop"];
@@ -293,15 +293,6 @@ export function providerOf(modelId) {
 
 function spansMultipleProviders(modelIds) {
   return new Set(modelIds.map(providerOf)).size >= 2;
-}
-
-/** Normalize a client-reported denial entry (string tool id, or {tool, at}) into the locked shape. */
-function normalizeReportedDenial(entry, reviewer) {
-  if (typeof entry === "string") return recordDenial(entry, reviewer);
-  if (entry && typeof entry === "object" && typeof entry.tool === "string") {
-    return recordDenial(entry.tool, reviewer, entry.at);
-  }
-  return null;
 }
 
 // ── Core scoring ─────────────────────────────────────────────────────────────
