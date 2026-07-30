@@ -8,6 +8,11 @@ name: Scorecard
 # code-scanning SARIF upload both work. publish_results is true and the steps
 # hard-fail rather than being continue-on-error, so a broken run is visible
 # instead of silently green (panelist#84).
+#
+# NB (observed while flipping in #84): scorecard-action only runs on the DEFAULT
+# branch — a workflow_dispatch on a feature branch fails with "Only the default
+# branch develop is supported". That is why this flip is verified by the
+# push-to-develop run after merge, not on the PR (Scorecard never runs on a PR).
 
 on:
   push:

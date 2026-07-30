@@ -2,10 +2,17 @@ name: Dependency Review
 
 # panelist ships with zero runtime dependencies, so this passes trivially today
 # — it's here as a gate against any future dependency introducing a known
-# vulnerability or an unacceptable license. The repo is public, so the
-# dependency-review API works without GitHub Advanced Security and this step
-# now hard-gates: a future dependency carrying a known CVE or an unacceptable
-# license fails the check rather than producing a green one (panelist#84).
+# vulnerability or an unacceptable license.
+#
+# STILL ADVISORY — but NOT because the repo is private (it is public now).
+# panelist#84 dropped continue-on-error and observed (2026-07-30) that the
+# dependency-review API still hard-fails with: "Dependency review is not
+# supported on this repository. Please ensure that Dependency graph is enabled"
+# — the Dependency graph feature is not enabled for this repo, and enabling it
+# requires repo/org ADMIN (unavailable to the automation that opened #84).
+# continue-on-error is retained so this doesn't paint every PR red. Drop it once
+# an admin enables Dependency graph (Settings → Code security). Tracked as a
+# follow-up to #84.
 
 on:
   pull_request:
@@ -21,3 +28,4 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        continue-on-error: true
