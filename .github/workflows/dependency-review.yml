@@ -2,13 +2,10 @@ name: Dependency Review
 
 # panelist ships with zero runtime dependencies, so this passes trivially today
 # — it's here as a gate against any future dependency introducing a known
-# vulnerability or an unacceptable license.
-#
-# ADVISORY until go-public: the dependency-review API requires the GitHub
-# dependency graph, which on a PRIVATE repo needs GitHub Advanced Security.
-# Until panelist is public (the OSS release gate), the action can return 403, so
-# the step is marked continue-on-error to avoid a spurious red check on a
-# zero-dependency repo. Flip continue-on-error off when the repo goes public.
+# vulnerability or an unacceptable license. The repo is public, so the
+# dependency-review API works without GitHub Advanced Security and this step
+# now hard-gates: a future dependency carrying a known CVE or an unacceptable
+# license fails the check rather than producing a green one (panelist#84).
 
 on:
   pull_request:
@@ -24,4 +21,3 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        continue-on-error: true

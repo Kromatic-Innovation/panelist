@@ -17,6 +17,23 @@ takes over.
 
 ### Security
 
+- **The two OSS "go-public" workflow gates are now flipped on (#84).** Both
+  are supply-chain controls on a package other people install, and both were
+  left in their private-repo "advisory" posture even though the repo is public
+  and published (`0.3.0` on npm, tags `v0.2.0`/`v0.2.1`/`v0.3.0`):
+  - `dependency-review.yml` dropped its `continue-on-error: true`, so a future
+    dependency carrying a known CVE or an unacceptable license now fails the
+    check instead of producing a green one. (Verified green on this PR — the
+    dependency-review action runs on `pull_request`.)
+  - `scorecard.yml` set `publish_results: true` (the point of running Scorecard
+    on a public project — publishing the rating) and dropped `continue-on-error`
+    on all three steps, so a broken Scorecard run is visible rather than
+    silently green. (Verified green via `workflow_dispatch` on the branch —
+    Scorecard does not run on `pull_request` by design.)
+
+    The stale "ADVISORY until go-public" comments in both files were removed so
+    they no longer mislead the next reader into thinking the repo is private.
+
 - **An untrusted artifact could break out of its `"""` fence and inject
   content into the prompt (#82).** All three prompt builders
   (`buildEvalPrompt` in `score.mjs`, `buildSpawnPrompt` in `spawn.mjs`, and
