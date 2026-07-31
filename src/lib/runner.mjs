@@ -33,6 +33,9 @@ import { spawn, buildSpawnPrompt } from "./spawn.mjs";
  *   @param {object} [task.responseSchema]
  *   @param {string} [task.horizon]
  *   @param {string[]} [task.tools]  explicit tool allowlist (panelist#72), forwarded to spawn.
+ *   @param {string} [task.model]  per-call model tier (panelist#113), forwarded to spawn. Like
+ *     task.tools, it does NOT change the rendered prompt — the output is byte-identical with or
+ *     without it (see the NOTE below).
  * @param {object} [deps]
  *   @param {function} [deps.buildPrompt]  override buildSpawnPrompt, same convention as spawn.
  * @returns {string} the rendered subagent prompt
@@ -50,6 +53,10 @@ export function renderRunnerPrompt(personaId, task = {}, deps = {}) {
 // NOTE: task.tools (panelist#72) does not change the RENDERED PROMPT above —
 // tool isolation is enforced by spawn's gate (isolation.mjs), not by prompt
 // wording. renderRunnerPrompt stays prompt-text-only, same as before.
+// task.model (panelist#113) is the same class of field: it is execution-shaping
+// (which model tier runs the call), not prompt-shaping, so the destructure above
+// deliberately omits it and the rendered prompt is byte-identical with or without
+// task.model. It flows through runPersona -> spawn -> client.complete, never here.
 
 /**
  * The generic agentic runner (D5): resolve a persona by id and run it for one
@@ -59,7 +66,10 @@ export function renderRunnerPrompt(personaId, task = {}, deps = {}) {
  * wrapper. No per-persona code lives here or anywhere else.
  *
  * @param {string} personaId
- * @param {object} task            same shape as spawn's opts: { mode, artifact, instruction?, responseSchema?, horizon?, tools? }
+ * @param {object} task            same shape as spawn's opts: { mode, artifact, instruction?, responseSchema?, horizon?, tools?, model? }
+ *   @param {string} [task.model]  per-call model tier (panelist#113); forwarded to spawn for
+ *     free (this delegates wholesale), which passes it opaquely to client.complete. Omit to
+ *     inherit the injected adapter's own model.
  * @param {object} [deps]
  *   @param {{model,complete}} [deps.client]  injected model client (default throws, same as spawn).
  *   @param {object} [deps.toolGate]          share a gate (isolation.mjs createToolGate) across a panel.
