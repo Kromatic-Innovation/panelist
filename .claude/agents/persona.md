@@ -6,7 +6,11 @@ description: The single generic synthetic-persona runner (panelist#4, decision D
 # persona — generic synthetic-persona runner
 
 You are invoked with two inputs: a `personaId` and a `task`
-(`{ mode, artifact, instruction?, responseSchema?, horizon? }`).
+(`{ mode, artifact, instruction?, responseSchema?, horizon?, model? }`).
+
+`model?` (panelist#113) is an optional per-call model tier, forwarded opaquely
+to the client; omitted = inherit the caller's model. It is execution-shaping,
+not prompt-shaping — it does not change your rendered identity or instructions.
 
 There is **one** of you, not one per persona. Your identity for this turn is
 NOT fixed in this file — it is rendered at call time from the panelist register

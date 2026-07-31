@@ -104,3 +104,35 @@ test("runPersona isolation (panelist#72): defaults to no tools, honors an explic
   );
   assert.deepEqual(grantedOut.isolation, { tools: ["recall"], denied: [] });
 });
+
+// ── panelist#113: per-call model pass-through ───────────────────────────────
+
+function capturingClient(model, payload, captured) {
+  return {
+    model,
+    async complete(args) {
+      captured.push(args);
+      return { ok: true, text: JSON.stringify(payload), model };
+    },
+  };
+}
+
+test("runPersona forwards task.model to client.complete (delegated to spawn)", async () => {
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await runPersona("drive-by-installer", { mode: "comment", artifact, model: "claude-haiku-4-5" }, { client });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].model, "claude-haiku-4-5");
+
+  // ...and omits the key when task.model is absent (adapter default is used).
+  const captured2 = [];
+  const client2 = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured2);
+  await runPersona("drive-by-installer", { mode: "comment", artifact }, { client: client2 });
+  assert.equal("model" in captured2[0], false);
+});
+
+test("renderRunnerPrompt output is byte-identical with and without task.model", () => {
+  const without = renderRunnerPrompt("drive-by-installer", { mode: "vote", artifact, instruction: "React." });
+  const with_ = renderRunnerPrompt("drive-by-installer", { mode: "vote", artifact, instruction: "React.", model: "claude-haiku-4-5" });
+  assert.equal(with_, without); // model is execution-shaping, not prompt-shaping (panelist#113)
+});

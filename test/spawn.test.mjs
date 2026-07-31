@@ -135,3 +135,21 @@ test("spawn honors an explicit temperature of 0 (nullish coalescing, not falsy)"
   await spawn("drive-by-installer", { mode: "comment", artifact }, { client, temperature: 0 });
   assert.equal(captured[0].temperature, 0);
 });
+
+// ── panelist#113: per-call model pass-through ───────────────────────────────
+
+test("spawn forwards opts.model to client.complete when supplied", async () => {
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await spawn("drive-by-installer", { mode: "comment", artifact, model: "claude-haiku-4-5" }, { client });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].model, "claude-haiku-4-5");
+});
+
+test("spawn omits the model key entirely (not model: undefined) when opts.model is not given", async () => {
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.equal(captured.length, 1);
+  assert.equal("model" in captured[0], false); // absent key, so the adapter's own default model is used
+});

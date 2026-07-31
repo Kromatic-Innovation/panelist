@@ -1,6 +1,6 @@
 // spawn.mjs — the persona invocation contract (#1263 slice E).
 //
-//   spawn(personaId, { mode, artifact, instruction, responseSchema?, horizon?, tools? }, deps)
+//   spawn(personaId, { mode, artifact, instruction, responseSchema?, horizon?, tools?, model? }, deps)
 //     -> { personaId, mode, verdict|null, message, dealKillers[], isolation }
 //
 // One persona, one turn, one wrapper. This is the FOUNDATIONAL single-turn
@@ -136,6 +136,11 @@ function normalizeDealKillers(v) {
  *   @param {string} [opts.horizon]
  *   @param {string[]} [opts.tools]  explicit tool allowlist (panelist#72). Omit for none —
  *     spawn is fully isolated by default. No wildcards; see isolation.mjs.
+ *   @param {string} [opts.model]  per-call model tier (panelist#113), forwarded opaquely to
+ *     client.complete. Omit to inherit the injected adapter's own model — omitted means the
+ *     `model` key is left OFF the complete() argument entirely, not set to undefined, so an
+ *     adapter that doesn't expect a per-call model sees no behavior change. panelist expresses
+ *     no policy about which tier a lane should use; the string is passed through unvalidated.
  * @param {object} [deps]
  *   @param {{model,complete}} [deps.client]  injected model client (default throws).
  *   @param {function} [deps.buildPrompt]     override buildSpawnPrompt.
@@ -146,7 +151,7 @@ function normalizeDealKillers(v) {
  * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] }, honesty: string }>}
  */
 export async function spawn(personaId, opts = {}, deps = {}) {
-  const { mode, artifact, instruction, responseSchema, horizon, tools } = opts;
+  const { mode, artifact, instruction, responseSchema, horizon, tools, model } = opts;
   if (!MODES.has(mode)) {
     throw new Error(`panelist spawn: mode must be one of ${[...MODES].join("|")} (got ${JSON.stringify(mode)})`);
   }
@@ -166,7 +171,13 @@ export async function spawn(personaId, opts = {}, deps = {}) {
 
   const maxTokens = deps.maxTokens ?? DEFAULT_MAX_TOKENS;
   const temperature = deps.temperature ?? DEFAULT_TEMPERATURE;
-  const res = await client.complete({ prompt, maxTokens, temperature, tools: gate.tools });
+  // Per-call model (panelist#113): forward it opaquely ONLY when the caller
+  // supplied one, spreading `...(model ? { model } : {})` so the `model` key is
+  // absent entirely when omitted (not `model: undefined`). An adapter that
+  // doesn't expect a per-call model therefore sees no behavior change and keeps
+  // using its own default; execution-shaping like maxTokens/temperature/tools,
+  // not prompt-shaping — the rendered prompt above is untouched by `model`.
+  const res = await client.complete({ prompt, maxTokens, temperature, tools: gate.tools, ...(model ? { model } : {}) });
   if (!res || res.ok !== true || typeof res.text !== "string") {
     throw new Error(`panelist spawn: client returned no usable text for ${JSON.stringify(personaId)}`);
   }

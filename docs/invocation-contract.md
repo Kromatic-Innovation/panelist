@@ -12,7 +12,7 @@
 ```js
 spawn(
   personaId,
-  { mode, artifact, instruction, responseSchema, horizon, tools },
+  { mode, artifact, instruction, responseSchema, horizon, tools, model },
   deps,
 );
 ```
@@ -28,6 +28,17 @@ spawn(
 - `tools` — optional explicit tool allowlist (panelist#72). **Omit for full
   isolation** — `spawn` grants no tools by default. See
   ["Tool isolation"](#tool-isolation-panelist72) below.
+- `model` — optional per-call model tier (panelist#113). **Omit to inherit** the
+  caller's model — the `model` string is forwarded opaquely to
+  `deps.client.complete(...)` only when supplied; when omitted, the `model` key
+  is left off the `complete` call entirely, so `deps.client`'s own `model`
+  (its adapter default) is used and no existing caller changes behavior. Like
+  `tools`, `model` is **execution-shaping, not prompt-shaping** — it never
+  changes the rendered prompt. panelist expresses **no policy** about which tier
+  any lane should use and does not validate the string against a provider
+  catalog; that is the consumer's decision. This is the per-call sibling of
+  `deps.client`'s adapter-level `model`, which remains the default when no
+  per-call `model` is given.
 - `deps.client` — injected model adapter (`{ model, complete }`). No live
   provider is bundled; the default throws.
 - `deps.toolGate` — optional: share one `isolation.mjs` `createToolGate()`
