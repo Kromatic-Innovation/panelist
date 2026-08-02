@@ -17,6 +17,24 @@ takes over.
 
 ### Added
 
+- **Persona records may carry an optional register-carried `modelTier`
+  ([#119](https://github.com/Kromatic-Innovation/panelist/issues/119), companion to cwc#1879).** A persona can now declare a default
+  model tier once (e.g. `modelTier: "sonnet"`) instead of requiring `model` at
+  every `spawn`/`runPersona` call site. Resolved in `src/lib/spawn.mjs`,
+  most-specific-wins: an explicit per-call `task.model`/`opts.model`
+  (panelist#113) always overrides `persona.modelTier`; with neither set, the
+  `model` key is left off the `complete()` call entirely, same as today. Like
+  `model`/`tools`, `modelTier` is purely execution-shaping — it is not in
+  `PERSONA_FIELDS` and never affects the rendered prompt
+  (`renderRunnerPrompt`/`buildSpawnPrompt` output is byte-identical with or
+  without it), and it is not validated against any model catalog. A
+  `registerPersonas` object source (`{ personas, rubrics?, usage?,
+  modelTier? }`) may also set a source-level default `modelTier` applied to
+  every record from that source that doesn't set its own; a per-record
+  `modelTier` always wins. Additive and optional throughout — omitting
+  `modelTier` leaves today's behavior byte-identical; `SCHEMA_VERSION` stays
+  at `2`. See `docs/invocation-contract.md`'s "Model tier resolution" section.
+
 - **New manual eval: tool-use prompt-injection regression against real models
   ([#96](https://github.com/Kromatic-Innovation/panelist/issues/96)).** `eval/tool-injection.mjs` is a small, manually-triggered (never
   CI, never a required check) security regression test — four adversarial

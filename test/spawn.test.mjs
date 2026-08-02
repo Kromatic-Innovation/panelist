@@ -153,3 +153,53 @@ test("spawn omits the model key entirely (not model: undefined) when opts.model 
   assert.equal(captured.length, 1);
   assert.equal("model" in captured[0], false); // absent key, so the adapter's own default model is used
 });
+
+// ── panelist#119: register-carried modelTier (companion to cwc#1879) ───────
+
+test("spawn passes persona.modelTier to client.complete when opts.model is not given", async () => {
+  registerPersonas([
+    {
+      id: "tiered-persona",
+      name: "Tiered",
+      role: "r",
+      caresAbout: ["x"],
+      rewards: ["x"],
+      punishes: ["x"],
+      quitsWhen: ["x"],
+      modelTier: "sonnet",
+    },
+  ]);
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await spawn("tiered-persona", { mode: "comment", artifact }, { client });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].model, "sonnet");
+});
+
+test("spawn: an explicit opts.model overrides a DIFFERENT persona.modelTier (per-call wins)", async () => {
+  registerPersonas([
+    {
+      id: "tiered-persona",
+      name: "Tiered",
+      role: "r",
+      caresAbout: ["x"],
+      rewards: ["x"],
+      punishes: ["x"],
+      quitsWhen: ["x"],
+      modelTier: "sonnet",
+    },
+  ]);
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await spawn("tiered-persona", { mode: "comment", artifact, model: "claude-haiku-4-5" }, { client });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].model, "claude-haiku-4-5"); // per-call beats register-carried default
+});
+
+test("spawn omits the model key when neither opts.model nor persona.modelTier is set (today's inherit-the-adapter behavior)", async () => {
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.equal(captured.length, 1);
+  assert.equal("model" in captured[0], false);
+});

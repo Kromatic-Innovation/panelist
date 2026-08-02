@@ -9,7 +9,7 @@ import {
   getUsage,
   clearRegistry,
 } from "../src/lib/register.mjs";
-import { SCHEMA_VERSION, USAGE_HEADER, PERSONA_SCHEMA, validatePersona } from "../src/lib/schema.mjs";
+import { SCHEMA_VERSION, USAGE_HEADER, PERSONA_SCHEMA, PERSONA_FIELDS, REQUIRED_FIELDS, validatePersona } from "../src/lib/schema.mjs";
 import reviewPack from "../packs/review/index.mjs";
 import businessPack from "../packs/business/index.mjs";
 
@@ -142,4 +142,65 @@ test("a forbidden demographic field (age) is rejected by validatePersona", () =>
   });
   assert.equal(ok, false);
   assert.ok(errors.some((e) => /forbidden demographic field/.test(e)));
+});
+
+// ── panelist#119: register-carried modelTier (companion to cwc#1879) ───────
+
+test("modelTier does not appear in PERSONA_FIELDS or REQUIRED_FIELDS", () => {
+  assert.ok(!PERSONA_FIELDS.includes("modelTier"));
+  assert.ok(!REQUIRED_FIELDS.includes("modelTier"));
+});
+
+test("validatePersona accepts records with and without modelTier; every record valid today stays valid", () => {
+  const withTier = {
+    id: "with-tier",
+    name: "With Tier",
+    role: "r",
+    caresAbout: ["a"],
+    rewards: ["a"],
+    punishes: ["a"],
+    quitsWhen: ["a"],
+    modelTier: "sonnet",
+  };
+  const withoutTier = {
+    id: "without-tier",
+    name: "Without Tier",
+    role: "r",
+    caresAbout: ["a"],
+    rewards: ["a"],
+    punishes: ["a"],
+    quitsWhen: ["a"],
+  };
+  assert.equal(validatePersona(withTier).ok, true);
+  assert.equal(validatePersona(withoutTier).ok, true);
+  // Every persona in the shipped packs (valid today, no modelTier) stays valid.
+  for (const p of [...reviewPack, ...businessPack]) {
+    assert.equal(validatePersona(p).ok, true, `${p.id} should still validate`);
+  }
+});
+
+test("registerPersonas stores a per-record modelTier verbatim, opaque and unvalidated", () => {
+  registerPersonas([
+    { id: "tiered", name: "Tiered", role: "r", caresAbout: ["a"], rewards: ["a"], punishes: ["a"], quitsWhen: ["a"], modelTier: "opus" },
+  ]);
+  assert.equal(getPersona("tiered").modelTier, "opus");
+});
+
+test("a source-level modelTier defaults every record from that source that doesn't set its own", () => {
+  registerPersonas({
+    personas: [
+      { id: "no-own-tier", name: "A", role: "r", caresAbout: ["a"], rewards: ["a"], punishes: ["a"], quitsWhen: ["a"] },
+      { id: "own-tier", name: "B", role: "r", caresAbout: ["a"], rewards: ["a"], punishes: ["a"], quitsWhen: ["a"], modelTier: "opus" },
+    ],
+    modelTier: "sonnet",
+  });
+  // per-record modelTier overrides the source default...
+  assert.equal(getPersona("own-tier").modelTier, "opus");
+  // ...but a record with no modelTier of its own picks up the source default.
+  assert.equal(getPersona("no-own-tier").modelTier, "sonnet");
+});
+
+test("a source with no modelTier leaves records without the field entirely (today's behavior)", () => {
+  registerPersonas(reviewPack);
+  assert.equal("modelTier" in getPersona("drive-by-installer"), false);
 });
