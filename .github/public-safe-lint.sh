@@ -105,12 +105,19 @@ RULES=(
 RULE_COUNT="${#RULES[@]}"
 
 # --- Per-rule canary: before trusting a clean verdict, prove that EVERY
-# rule still matches a known-bad seed of its OWN. Guards two fail-open shapes
-# per rule: BSD sed's \b silently behaving as a no-op, and a '|'-joined
-# alternation silently aborting the whole expression. Both exit 0 and look
-# like they ran.
+# rule still matches a known-bad seed of its OWN. This proves each rule's
+# pattern still compiles and still matches a known-bad shape -- guarding a
+# '|'-joined alternation silently aborting the whole expression, a typo, or
+# any other change that quietly turns a rule into a no-op. It does NOT prove
+# a rule's \b behaves correctly: \b can only ever REMOVE matches relative to
+# no \b at all, so a positive seed matches identically whether \b is live or
+# silently a no-op (for example BSD sed/grep ignoring \b). Only a negative
+# control -- a line that must NOT match while \b works, and DOES match once
+# \b goes no-op -- can prove \b is live. The two rules whose correctness
+# depends on \b (bare-issue-ref, personal-attribution-agreed-with) get that
+# negative-control canary below (ANTISEEDS), after this block.
 #
-# This is deliberately per-rule, not suite-aggregate (cwc#2025). A canary
+# This is deliberately per-rule, not suite-aggregate. A canary
 # that probes rules only until the first one matches, then stops, cannot
 # tell "all N rules live" from "rule 1 lives and rules 2..N silently went
 # dead" -- it reports "matched at least one of N", a numerator with the
@@ -186,6 +193,66 @@ if [ "${#_dead_rules[@]}" -ne 0 ]; then
 fi
 echo "canary: ok (all $RULE_COUNT rule(s) matched their own known-bad seed)"
 rm -rf "$_canary_dir"
+trap - EXIT
+
+# --- \b antiseed canary: for the rules whose correctness depends on \b,
+# prove \b is actually live via a NEGATIVE control -- a line that must NOT
+# match while \b works, and DOES match once \b silently becomes a no-op.
+#
+# Sparse and index-aligned with RULES/SEEDS: ANTISEEDS[i] is empty for every
+# rule whose pattern does not depend on \b; only bare-issue-ref and
+# personal-attribution-agreed-with get a real entry. Each antiseed is
+# assembled from sub-fragments for the same reason SEEDS are above -- a
+# contiguous literal antiseed in this file's own source would flag this
+# script against itself on every adopting repo.
+_anti_ref_a='bare '; _anti_ref_b='#123456 with no qualifier'
+_anti_aw_a='note agreed wi'; _anti_aw_b='th ABCDEF here'
+ANTISEEDS=(
+  ''
+  ''
+  ''
+  "${_anti_ref_a}${_anti_ref_b}"
+  ''
+  "${_anti_aw_a}${_anti_aw_b}"
+  ''
+)
+
+if [ "${#ANTISEEDS[@]}" -ne "$RULE_COUNT" ]; then
+  echo "CANARY MISCONFIGURED: ${#ANTISEEDS[@]} ANTISEEDS slot(s) defined for $RULE_COUNT rule(s) in $SCRIPT_NAME." >&2
+  echo "ANTISEEDS must be index-aligned with RULES, one slot per rule (empty string for rules that do not depend on \\b) -- refusing to trust a clean verdict." >&2
+  exit 1
+fi
+
+_anticanary_dir="$(mktemp -d)"
+trap 'rm -rf "$_anticanary_dir"' EXIT
+
+# Probe each \b-dependent rule against ONLY its own negative control, so one
+# rule's antiseed can never vouch for a different rule.
+_dead_boundary_rules=()
+for i in "${!RULES[@]}"; do
+  [ -z "${ANTISEEDS[$i]}" ] && continue
+  IFS=$'\t' read -r _name _pattern _wb <<<"${RULES[$i]}"
+  _anti_file="$_anticanary_dir/antiseed_${i}.txt"
+  printf '%s\n' "${ANTISEEDS[$i]}" > "$_anti_file"
+  flags=(-IniE)
+  [ "$_wb" = "1" ] && flags+=(-w)
+  if grep "${flags[@]}" "$_pattern" "$_anti_file" >/dev/null 2>&1; then
+    _dead_boundary_rules+=("$_name")
+  fi
+done
+
+if [ "${#_dead_boundary_rules[@]}" -ne 0 ]; then
+  echo "CANARY FAILED: ${#_dead_boundary_rules[@]} rule(s) have a dead \\b word-boundary in $SCRIPT_NAME:" >&2
+  for _dr in "${_dead_boundary_rules[@]}"; do
+    echo "  - dead boundary: $_dr (matched its negative control -- \\b is silently a no-op, so this rule now matches strings it must not)" >&2
+  done
+  echo "The scanner's word-boundary guard is broken -- refusing to trust a clean verdict." >&2
+  rm -rf "$_anticanary_dir"
+  trap - EXIT
+  exit 1
+fi
+echo "canary: ok (\\b is live for all word-boundary-dependent rule(s))"
+rm -rf "$_anticanary_dir"
 trap - EXIT
 
 # --- Optional path+rule suppression config. Read from the SCAN
