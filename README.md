@@ -171,7 +171,7 @@ Run it:
 - **Manually via GitHub Actions** — dispatch the "Eval - Tool Injection" workflow
   (`.github/workflows/eval-tool-injection.yml`, `workflow_dispatch` only; needs the
   same 1Password-provisioned `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` as the
-  contract-conformance eval — see #108).
+  contract-conformance eval — see [#108](https://github.com/Kromatic-Innovation/panelist/issues/108)).
 - **Locally** — `ANTHROPIC_API_KEY=... OPENAI_API_KEY=... node eval/tool-injection.mjs`
   (a provider with no key set is skipped, not treated as a failure). With no
   credentials at all it still runs `--self-test` (the same four cases' assertion

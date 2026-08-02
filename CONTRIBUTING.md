@@ -21,7 +21,7 @@ build step; `npm test` and `npm run drift` are the two commands CI runs.
   `main` is promoted from `develop` deliberately via the `Promote Main` workflow
   and should not receive direct PRs.
 - One issue, one PR where practical. Reference the issue you're addressing
-  (e.g. `Fixes #12`) so scope is traceable.
+  (e.g. `Fixes #NNN`) so scope is traceable.
 - Keep PRs scoped to the linked issue. Drive-by refactors, prose rewrites, or
   unrelated cleanup belong in a separate PR.
 - CI (`.github/workflows/ci.yml`) must pass: tests green, no drift.

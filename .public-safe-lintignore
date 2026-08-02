@@ -1,0 +1,19 @@
+# public-safe-lint suppressions (panelist#120)
+#
+# bare-issue-ref: these files carry legitimate bare `#N` references to
+# panelist's own already-public issue/PR history inside source-code or
+# workflow comments (never markdown prose). Rewriting a `.mjs`/`.yml`
+# comment into a `[#N](...)` markdown link would not render as a link there
+# and would just add noise, so each is exempted by exact path rather than
+# rewritten. Prose docs (CHANGELOG.md, README.md, eval/README.md) were
+# fixed instead -- see the panelist#120 PR body for the split.
+bare-issue-ref test/drift.test.mjs
+bare-issue-ref test/score-units.test.mjs
+bare-issue-ref .github/workflows/eval-tool-injection.yml
+bare-issue-ref .github/workflows/dependency-review.yml
+bare-issue-ref .github/workflows/scorecard.yml
+bare-issue-ref eval/contract-conformance.mjs
+bare-issue-ref eval/_adapters.mjs
+bare-issue-ref eval/tool-injection.mjs
+bare-issue-ref src/lib/score.mjs
+bare-issue-ref src/lib/spawn.mjs
