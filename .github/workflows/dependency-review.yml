@@ -1,18 +1,20 @@
 name: Dependency Review
 
 # panelist ships with zero runtime dependencies, so this passes trivially today
-# — it's here as a gate against any future dependency introducing a known
-# vulnerability or an unacceptable license.
+# — it's here as a HARD gate against any future dependency introducing a known
+# vulnerability or an unacceptable license. panelist is a published public npm
+# package, so a bad transitive dependency would ship to every consumer.
 #
-# STILL ADVISORY — but NOT because the repo is private (it is public now).
-# panelist#84 dropped continue-on-error and observed (2026-07-30) that the
-# dependency-review API still hard-fails with: "Dependency review is not
-# supported on this repository. Please ensure that Dependency graph is enabled"
-# — the Dependency graph feature is not enabled for this repo, and enabling it
-# requires repo/org ADMIN (unavailable to the automation that opened #84).
-# continue-on-error is retained so this doesn't paint every PR red. Drop it once
-# an admin enables Dependency graph (Settings → Code security). Tracked as a
-# follow-up to #84.
+# HARD gate (no continue-on-error) as of panelist#103. When #84 first tried this
+# (2026-07-30) the action reported "Dependency review is not supported on this
+# repository. Please ensure that Dependency graph is enabled" because the
+# repo's Dependency graph feature — a repo/org ADMIN setting the automation
+# cannot toggle — was not yet enabled. The operator explicitly enabled
+# Dependency graph on 2026-08-02, verified directly via the dependency-graph
+# SBOM endpoint (GET /repos/Kromatic-Innovation/panelist/dependency-graph/sbom),
+# which now returns a real SBOM where it previously returned 404. With the
+# precondition confirmed, continue-on-error is dropped and the gate now blocks
+# PRs on a failing review. Follow-up to #84.
 
 on:
   pull_request:
@@ -28,4 +30,3 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        continue-on-error: true
