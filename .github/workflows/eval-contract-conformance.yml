@@ -42,7 +42,7 @@ jobs:
       # must set the actual vault item paths (see the header comment above)
       # and the OP_SERVICE_ACCOUNT_TOKEN repo secret.
       - name: Load provider API keys from 1Password
-        uses: 1password/load-secrets-action@v4
+        uses: 1password/load-secrets-action@eb2efd0703da22a93c467f2d1ffbb6826c11e19c  # v4.1.1
         with:
           export-env: true
         env:
