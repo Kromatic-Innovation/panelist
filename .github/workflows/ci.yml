@@ -20,3 +20,5 @@ jobs:
           node-version: 20
       - run: node --test test/*.test.mjs
       - run: npm run drift
+      - name: Public-safe lint (org-agnostic leak shapes)
+        run: bash .github/public-safe-lint.sh .

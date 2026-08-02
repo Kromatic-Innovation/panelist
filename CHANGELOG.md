@@ -18,7 +18,7 @@ takes over.
 ### Added
 
 - **New manual eval: tool-use prompt-injection regression against real models
-  (#96).** `eval/tool-injection.mjs` is a small, manually-triggered (never
+  ([#96](https://github.com/Kromatic-Innovation/panelist/issues/96)).** `eval/tool-injection.mjs` is a small, manually-triggered (never
   CI, never a required check) security regression test — four adversarial
   cases, not an eval suite, not fuzzing — that confirms the tool-isolation
   gate (`src/lib/isolation.mjs`) holds when a real model (one Anthropic, one
@@ -28,11 +28,11 @@ takes over.
   2 confirms a granted tool stays usable after an ungranted attempt is
   denied (no false-positive lockout); Case 3 confirms the `DISCOVERY_TOOLS`
   closed-under-discovery invariant against a live model; Case 4 exercises
-  the `"""`-fence neutralization from #82 but is explicitly documented as
-  weak evidence that does **not** close #82 (a separate, ungated
+  the `"""`-fence neutralization from [#82](https://github.com/Kromatic-Innovation/panelist/issues/82) but is explicitly documented as
+  weak evidence that does **not** close [#82](https://github.com/Kromatic-Innovation/panelist/issues/82) (a separate, ungated
   verdict/axis-score-injection surface). Factored the raw-`fetch` provider
   adapter plumbing out of `eval/contract-conformance.mjs` into a new shared
-  `eval/_adapters.mjs` (re-pointed #95's import; #95's own behavior is
+  `eval/_adapters.mjs` (re-pointed [#95](https://github.com/Kromatic-Innovation/panelist/issues/95)'s import; [#95](https://github.com/Kromatic-Innovation/panelist/issues/95)'s own behavior is
   unchanged) and added `toolCapableAnthropicClient`/
   `toolCapableOpenaiClient`, which expose a fixed probe tool set
   (`recall`/`web_fetch`/`tool_search`) at the provider API level and report
@@ -42,10 +42,10 @@ takes over.
   tool-attempting client (`test/_helpers.mjs`), proving the gate-assertion
   code path offline. Zero added dependency. Triggered via
   `.github/workflows/eval-tool-injection.yml` (`workflow_dispatch` only;
-  same 1Password credentials as #95, tracked by #108). See the new "Eval:
+  same 1Password credentials as [#95](https://github.com/Kromatic-Innovation/panelist/issues/95), tracked by [#108](https://github.com/Kromatic-Innovation/panelist/issues/108)). See the new "Eval:
   tool-injection" README section and `eval/README.md`.
 
-- **New manual eval: contract conformance across supported models (#95).**
+- **New manual eval: contract conformance across supported models ([#95](https://github.com/Kromatic-Innovation/panelist/issues/95)).**
   `eval/contract-conformance.mjs` is a manually-triggered (never CI, never a
   required check) harness that checks whether panelist's DEFAULT prompts
   (`buildEvalPrompt`, `buildSpawnPrompt`, the junction loop's `CONTRACT`)
@@ -63,7 +63,7 @@ takes over.
   README section and `eval/README.md`.
 
 - **`maxTokens`/`temperature` are now injectable, and scoring/spawn/junction
-  failures are diagnosable (#85).** The three model-call sites
+  failures are diagnosable ([#85](https://github.com/Kromatic-Innovation/panelist/issues/85)).** The three model-call sites
   (`score.mjs`'s `scoreCandidate`, `spawn.mjs`'s `spawn`, `junction.mjs`'s
   `runJunctionLoop`) previously hardcoded `maxTokens`/`temperature`,
   divergently (512 vs. 1024) and non-overridably. All three now read
@@ -86,7 +86,7 @@ takes over.
 ### Changed
 
 - **De-duplicated `normalizeReportedDenial` across the three execution
-  planes (#90).** `score.mjs`, `spawn.mjs`, and `junction.mjs` each defined
+  planes ([#90](https://github.com/Kromatic-Innovation/panelist/issues/90)).** `score.mjs`, `spawn.mjs`, and `junction.mjs` each defined
   an identical private `normalizeReportedDenial(entry, reviewer)` helper
   that normalizes a client-reported denial (a bare tool-id string, or a
   `{ tool, at }` object) into the locked `isolation.denied[]` shape via
@@ -98,7 +98,7 @@ takes over.
   `reviewerFor(persona)` in junction). Pure structural move — no behavior
   change.
 
-- **Broke the `junction.mjs` <-> `junction-schema.mjs` import cycle (#89).**
+- **Broke the `junction.mjs` <-> `junction-schema.mjs` import cycle ([#89](https://github.com/Kromatic-Innovation/panelist/issues/89)).**
   The two modules imported from each other (`junction.mjs` imported
   `buildTrace`/`normalizeEngagement` from `junction-schema.mjs`, which
   imported `BAIL` back from `junction.mjs`). It was harmless today only by
@@ -113,7 +113,7 @@ takes over.
 ### Docs
 
 - **README and best-practices doc reconciled with actual cross-model and
-  kill-floor behavior (#87).** README's "Cross-model panels" bullet and
+  kill-floor behavior ([#87](https://github.com/Kromatic-Innovation/panelist/issues/87)).** README's "Cross-model panels" bullet and
   intro line read as if panelist enforced a ≥2-provider panel by default;
   in fact panelist bundles no provider layer, cannot compose the panel for
   the caller, and a single-provider panel runs to completion and returns
@@ -127,7 +127,7 @@ takes over.
 ### Security
 
 - **OSS "go-public" workflow gates revisited against live platform behavior
-  (#84).** Both `dependency-review.yml` and `scorecard.yml` carried in-file
+  ([#84](https://github.com/Kromatic-Innovation/panelist/issues/84)).** Both `dependency-review.yml` and `scorecard.yml` carried in-file
   instructions to flip a setting "at the OSS go-public gate"; the repo is
   public and published (`0.3.0` on npm) but the flips were never made. Both
   were attempted and **observed** (2026-07-30), since third-party platform
@@ -151,7 +151,7 @@ takes over.
     mislead the next reader into thinking the repo is private.
 
 - **An untrusted artifact could break out of its `"""` fence and inject
-  content into the prompt (#82).** All three prompt builders
+  content into the prompt ([#82](https://github.com/Kromatic-Innovation/panelist/issues/82)).** All three prompt builders
   (`buildEvalPrompt` in `score.mjs`, `buildSpawnPrompt` in `spawn.mjs`, and
   the current-junction view in `junction.mjs`) fenced untrusted artifact/
   content text with a raw, unescaped `` `"""${text}"""` `` interpolation.
@@ -178,7 +178,7 @@ takes over.
 ### Fixed
 
 - **The honesty caveat is now auto-stamped on every public output surface,
-  not just some of them (#81).** An audit found 8 public surfaces that did
+  not just some of them ([#81](https://github.com/Kromatic-Innovation/panelist/issues/81)).** An audit found 8 public surfaces that did
   not carry the `honesty` field despite the docs/README claiming "every
   panel output auto-stamps the caveat":
   - `score()`/`scoreCandidate()` with a custom `deps.fallback` — the
@@ -217,7 +217,7 @@ takes over.
   `docs/invocation-contract.md`'s "Forward-compat" note (previously said
   the stamp was "not yet added") to describe the now-shipped behavior.
 
-- **A total panel failure no longer returns a passing verdict (#80).** When
+- **A total panel failure no longer returns a passing verdict ([#80](https://github.com/Kromatic-Innovation/panelist/issues/80)).** When
   every panelist failed, `scoreCandidate` fell back to a neutral 5 on every
   axis and *derived* the verdict — but the neutral 5 collides with the default
   `cut_threshold` of 5.0, and `decideVerdict` cuts only on
@@ -231,7 +231,7 @@ takes over.
   collision is visible at the point of definition.
 
 - **CI now actually runs `npm run drift`, matching what CONTRIBUTING.md
-  claimed all along (#83).** `CONTRIBUTING.md` asserted CI runs both
+  claimed all along ([#83](https://github.com/Kromatic-Innovation/panelist/issues/83)).** `CONTRIBUTING.md` asserted CI runs both
   `npm test` and `npm run drift` and gates on both, but `ci.yml` only ran
   `node --test test/*.test.mjs` — the drift check (`src/lib/drift-check.mjs`,
   a real CLI that resolves `process.exit(1)` on failure) was wired into
@@ -243,11 +243,11 @@ takes over.
   fails on drift rather than always exiting 0.
 
 - **`checkHonesty` had zero call sites — the batch honesty-stamp guardrail
-  shipped but nothing ran it (#86).** `drift-check.mjs`'s `checkHonesty`
+  shipped but nothing ran it ([#86](https://github.com/Kromatic-Innovation/panelist/issues/86)).** `drift-check.mjs`'s `checkHonesty`
   (added alongside #6/#81's per-surface stamping) takes a batch of panel
   summaries/envelopes and reports which omit the honesty caveat, but it was
   never invoked by `main()`, any test, or CI — exactly the kind of gap that
-  let #81's stamping hole go unnoticed. `checkHonesty` is intentionally NOT
+  let [#81](https://github.com/Kromatic-Innovation/panelist/issues/81)'s stamping hole go unnoticed. `checkHonesty` is intentionally NOT
   wired into `drift-check.mjs`'s `main()`/`scanRepo` (those scan repo
   records, not panel summaries; forcing it in there would be wrong). Added
   `test/honesty-gate.test.mjs`, which builds a real batch from every
@@ -264,7 +264,7 @@ takes over.
   by the test suite.
 
 - **`package.json`'s version and `PANELIST_VERSION` could drift silently
-  (#88).** The two are kept in sync by a manual release step
+  ([#88](https://github.com/Kromatic-Innovation/panelist/issues/88)).** The two are kept in sync by a manual release step
   (`CONTRIBUTING.md`), but nothing asserted they matched. Added
   `test/version.test.mjs`, which fails if `src/index.mjs`'s
   `PANELIST_VERSION` diverges from `package.json`'s `version`. Also removed
@@ -279,7 +279,7 @@ changes default behavior for existing callers of `spawn`/`runPersona`.
 
 ### Changed
 
-- **Persona tool isolation is now deny-by-default (#72).** Previously, a
+- **Persona tool isolation is now deny-by-default ([#72](https://github.com/Kromatic-Innovation/panelist/issues/72)).** Previously, a
   persona's isolation from ambient tools (an MCP memory server, web search,
   filesystem search) was enforced by prompt instruction only — if the host
   running `spawn`/`runPersona` granted tools, nothing in panelist's output
@@ -297,7 +297,7 @@ changes default behavior for existing callers of `spawn`/`runPersona`.
   `recordDenial`, `createToolGate`, `buildIsolationEnvelope`, `unionTools`) is
   the deny/allow decision as an independent, testable unit, exported from
   `src/index.mjs`.
-- **The multi-turn junction plane is now gated too (#75).** `runJunctionLoop`
+- **The multi-turn junction plane is now gated too ([#75](https://github.com/Kromatic-Innovation/panelist/issues/75)).** `runJunctionLoop`
   reached the injected model client with no allowlist, no gate, and no
   `isolation` field on its result — a hole in the same guarantee the rest of
   this release ships, and the worst case for it (a persona holds ambient tool
@@ -308,7 +308,7 @@ changes default behavior for existing callers of `spawn`/`runPersona`.
   `isolation: { tools, denied }` on every stop path — bail, patience-budget
   exhaustion, terminal, and invalid-decision alike.
 - **The programmatic scoring plane is now gated too, closing the last hole
-  (#77).** `scoreCandidate`/`score` accepted `deps.tools` and reported it in
+  ([#77](https://github.com/Kromatic-Innovation/panelist/issues/77)).** `scoreCandidate`/`score` accepted `deps.tools` and reported it in
   the `isolation` envelope as granted, but never forwarded it to the injected
   panel and never checked anything — `isolation.denied` was hardcoded `[]`.
   An envelope reporting enforcement it never performed is worse than no
@@ -324,7 +324,7 @@ changes default behavior for existing callers of `spawn`/`runPersona`.
   caveat — "a persona sees the artifact and nothing else" is now a structural
   claim, not an aspiration.
 - README broadened from a readers-and-drafts framing to synthetic users of
-  any artifact (#73): the opening use-case paragraph, the use-cases list (now
+  any artifact ([#73](https://github.com/Kromatic-Innovation/panelist/issues/73)): the opening use-case paragraph, the use-cases list (now
   spanning copy, interface/flow, commercial, developer-facing, and decision
   review), and the `business` pack's motivation no longer read as prose-only.
   The honesty caveat itself is unchanged. `package.json`'s `description` and
@@ -360,7 +360,7 @@ re-publish an existing version.
 ### Note
 
 The proposal to replace this repo's inline `release.yml` with a shared
-cross-repo reusable workflow was **withdrawn** (#59, PR #62): a public repo
+cross-repo reusable workflow was **withdrawn** ([#59](https://github.com/Kromatic-Innovation/panelist/issues/59), PR [#62](https://github.com/Kromatic-Innovation/panelist/issues/62)): a public repo
 cannot call a reusable workflow hosted in a private one, so it could never
 execute. The shared-template goal moves to a sync-and-drift-check model
 (code-workspace-config#1559), leaving this repo's working inline workflow in
@@ -369,7 +369,7 @@ place.
 ## [0.2.0] - 2026-07-21
 
 New MINOR release (pre-1.0 semantics — see above): the multi-turn **junction
-contract** subsystem landed as a new public feature across #46/#47/#48, so this
+contract** subsystem landed as a new public feature across [#46](https://github.com/Kromatic-Innovation/panelist/issues/46)/#47/#48, so this
 is the release it belongs to, distinct from the `0.1.1` docs-only patch. Bundles
 the still-unreleased leak-sweep documentation fixes into the same version rather
 than splitting them into a separate tag.
