@@ -191,3 +191,5 @@ reasoning.
 ## Status
 
 Early. Developed internally, then open sourced. Apache-2.0.
+
+<!-- scratch canary line, will be removed: /Users/someone/x -->
