@@ -15,12 +15,20 @@
 // A "source" is one of:
 //   - an array of persona records
 //   - a single persona record
-//   - an object { personas?: [...], rubrics?: { key: rubric }, usage?: string }
+//   - an object { personas?: [...], rubrics?: { key: rubric }, usage?: string, modelTier?: string }
 //
 // Later sources override earlier ones by id (last-wins), so a consumer can layer
 // a private override on top of a public pack. Unlike the file loader it replaces,
 // registerPersonas FAILS FAST on a malformed record (a runtime compose call has a
 // caller to hand the error to; a degrade-to-empty would hide the bug).
+//
+// Source-level `modelTier` (panelist#119, optional): when an object source
+// carries a top-level `modelTier`, it becomes the default `modelTier` for
+// every record registered FROM THAT SOURCE that doesn't already carry its own
+// `modelTier` — a per-record `modelTier` always wins over the source default.
+// This falls out of the same per-source-object shape `usage`/`rubrics` already
+// use; it does not change resolution order at spawn time (spawn.mjs still only
+// ever sees `persona.modelTier`, however it got set).
 //
 // Pure, zero-dep, no filesystem access.
 
@@ -64,6 +72,13 @@ export function registerPersonas(...sources) {
     if (source && !Array.isArray(source) && typeof source === "object" && typeof source.usage === "string") {
       _usage = source.usage;
     }
+    // A source may carry a default modelTier (panelist#119) applied to every
+    // record it contributes that doesn't already set its own — per-record
+    // modelTier always wins over this source-level default.
+    const sourceModelTier =
+      source && !Array.isArray(source) && typeof source === "object" && typeof source.modelTier === "string"
+        ? source.modelTier
+        : null;
     for (const record of iterRecords(source)) {
       const { ok, errors } = validatePersona(record);
       if (!ok) {
@@ -73,7 +88,8 @@ export function registerPersonas(...sources) {
           )}: ${errors.join("; ")}`,
         );
       }
-      _personas.set(record.id, record);
+      const resolved = sourceModelTier != null && !("modelTier" in record) ? { ...record, modelTier: sourceModelTier } : record;
+      _personas.set(resolved.id, resolved);
     }
   }
   return getPersonas();

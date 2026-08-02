@@ -80,6 +80,8 @@ hook, with two runnable worked examples ([branching](examples/junction-branching
 
 A persona is a durable **identity** record (what it rewards, punishes, and quits over). The **task** (vote / comment / converse) is supplied by the caller at invocation time — so one definition answers any instruction, with no new consumer script per use case. See [`docs/invocation-contract.md`](docs/invocation-contract.md) for the formal task/response envelope. For the agentic plane, `src/lib/runner.mjs` (`renderRunnerPrompt` / `runPersona`, backing `.claude/agents/persona.md`) is a single generic runner for ANY registered persona by id — no per-persona agent files.
 
+A persona may also carry an optional `modelTier` — a register-carried default model tier ("this panel runs at `sonnet`"), so you don't have to pass `model` at every `spawn`/`runPersona` call site. It's opaque and unvalidated, purely execution-shaping (never part of the rendered prompt), and a per-call `model` always overrides it. See ["Model tier resolution"](docs/invocation-contract.md#model-tier-resolution-panelist119-companion-to-cwc1879) in the invocation contract.
+
 > **Prerequisite:** panelist bundles **no live model**. You inject a client as
 > `spawn`'s third argument (`deps.client`) — its shape is
 > `{ model, complete: async ({ prompt }) => ({ ok, text, model }) }`, the same

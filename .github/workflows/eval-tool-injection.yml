@@ -44,7 +44,7 @@ jobs:
       # as .github/workflows/eval-contract-conformance.yml (panelist#95) and
       # promote-main.yml — mirrored in shape, same credentials (#108).
       - name: Load provider API keys from 1Password
-        uses: 1password/load-secrets-action@v4
+        uses: 1password/load-secrets-action@eb2efd0703da22a93c467f2d1ffbb6826c11e19c  # v4.1.1
         with:
           export-env: true
         env:

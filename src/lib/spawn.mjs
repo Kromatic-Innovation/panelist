@@ -31,6 +31,14 @@
 // same `tools` allowlist) before calling one, and MAY additionally report
 // attempted-but-denied calls back via `res.deniedToolCalls` (array of tool id
 // strings, or `{ tool, at }` objects) — spawn merges those into `isolation.denied`.
+//
+// Model tier resolution (panelist#113 + panelist#119, companion to cwc#1879):
+// most specific wins — opts.model (explicit per-call) beats persona.modelTier
+// (an optional, register-carried default set on the persona record) beats
+// leaving the `model` key off entirely (inherit the injected adapter's own
+// model — today's behavior). `persona.modelTier` is opaque, unvalidated, and
+// execution-shaping only: it is never read by buildSpawnPrompt, so the
+// rendered prompt is byte-identical with or without it, same as opts.model.
 
 import { getPersona } from "./register.mjs";
 import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
@@ -141,6 +149,8 @@ function normalizeDealKillers(v) {
  *     `model` key is left OFF the complete() argument entirely, not set to undefined, so an
  *     adapter that doesn't expect a per-call model sees no behavior change. panelist expresses
  *     no policy about which tier a lane should use; the string is passed through unvalidated.
+ *     Takes precedence over the persona's own `modelTier` (panelist#119) when both are given —
+ *     most specific wins.
  * @param {object} [deps]
  *   @param {{model,complete}} [deps.client]  injected model client (default throws).
  *   @param {function} [deps.buildPrompt]     override buildSpawnPrompt.
@@ -171,13 +181,25 @@ export async function spawn(personaId, opts = {}, deps = {}) {
 
   const maxTokens = deps.maxTokens ?? DEFAULT_MAX_TOKENS;
   const temperature = deps.temperature ?? DEFAULT_TEMPERATURE;
-  // Per-call model (panelist#113): forward it opaquely ONLY when the caller
-  // supplied one, spreading `...(model ? { model } : {})` so the `model` key is
-  // absent entirely when omitted (not `model: undefined`). An adapter that
-  // doesn't expect a per-call model therefore sees no behavior change and keeps
-  // using its own default; execution-shaping like maxTokens/temperature/tools,
-  // not prompt-shaping — the rendered prompt above is untouched by `model`.
-  const res = await client.complete({ prompt, maxTokens, temperature, tools: gate.tools, ...(model ? { model } : {}) });
+  // Model resolution (panelist#113 + panelist#119) — most specific wins:
+  //   opts.model (explicit per-call) -> persona.modelTier (register-carried
+  //   default) -> undefined (inherit the injected adapter's own model, i.e.
+  //   today's behavior). Forward the resolved value opaquely ONLY when it is
+  //   set, spreading `...(resolvedModel ? { model: resolvedModel } : {})` so
+  //   the `model` key is absent entirely when neither is given (not `model:
+  //   undefined`). An adapter that doesn't expect a per-call model therefore
+  //   sees no behavior change and keeps using its own default;
+  //   execution-shaping like maxTokens/temperature/tools, not prompt-shaping —
+  //   the rendered prompt above is untouched by either `model` or
+  //   `persona.modelTier`.
+  const resolvedModel = model || persona.modelTier;
+  const res = await client.complete({
+    prompt,
+    maxTokens,
+    temperature,
+    tools: gate.tools,
+    ...(resolvedModel ? { model: resolvedModel } : {}),
+  });
   if (!res || res.ok !== true || typeof res.text !== "string") {
     throw new Error(`panelist spawn: client returned no usable text for ${JSON.stringify(personaId)}`);
   }

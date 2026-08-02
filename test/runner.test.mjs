@@ -136,3 +136,60 @@ test("renderRunnerPrompt output is byte-identical with and without task.model", 
   const with_ = renderRunnerPrompt("drive-by-installer", { mode: "vote", artifact, instruction: "React.", model: "claude-haiku-4-5" });
   assert.equal(with_, without); // model is execution-shaping, not prompt-shaping (panelist#113)
 });
+
+// ── panelist#119: register-carried modelTier (companion to cwc#1879) ───────
+
+test("renderRunnerPrompt output is byte-identical for a persona with and without modelTier", () => {
+  registerPersonas([
+    { id: "plain-persona", name: "Plain", role: "r", caresAbout: ["x"], rewards: ["x"], punishes: ["x"], quitsWhen: ["x"] },
+    { id: "tiered-persona", name: "Plain", role: "r", caresAbout: ["x"], rewards: ["x"], punishes: ["x"], quitsWhen: ["x"], modelTier: "sonnet" },
+  ]);
+  const plain = renderRunnerPrompt("plain-persona", { mode: "vote", artifact, instruction: "React." });
+  const tiered = renderRunnerPrompt("tiered-persona", { mode: "vote", artifact, instruction: "React." });
+  assert.equal(tiered, plain); // modelTier is execution-shaping, not prompt-shaping — same as task.model
+});
+
+test("runPersona with no task.model on a persona carrying modelTier passes that tier to client.complete", async () => {
+  registerPersonas([
+    {
+      id: "tiered-persona",
+      name: "Tiered",
+      role: "r",
+      caresAbout: ["x"],
+      rewards: ["x"],
+      punishes: ["x"],
+      quitsWhen: ["x"],
+      modelTier: "sonnet",
+    },
+  ]);
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await runPersona("tiered-persona", { mode: "comment", artifact }, { client });
+  assert.equal(captured[0].model, "sonnet");
+});
+
+test("runPersona with an explicit task.model on a persona carrying a DIFFERENT modelTier passes task.model (per-call wins)", async () => {
+  registerPersonas([
+    {
+      id: "tiered-persona",
+      name: "Tiered",
+      role: "r",
+      caresAbout: ["x"],
+      rewards: ["x"],
+      punishes: ["x"],
+      quitsWhen: ["x"],
+      modelTier: "sonnet",
+    },
+  ]);
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await runPersona("tiered-persona", { mode: "comment", artifact, model: "claude-haiku-4-5" }, { client });
+  assert.equal(captured[0].model, "claude-haiku-4-5");
+});
+
+test("runPersona with no modelTier and no task.model passes nothing (today's inherit-the-adapter behavior)", async () => {
+  const captured = [];
+  const client = capturingClient("claude-x", { message: "reacting", dealKillers: [] }, captured);
+  await runPersona("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.equal("model" in captured[0], false);
+});
