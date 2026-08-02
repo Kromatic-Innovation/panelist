@@ -35,7 +35,8 @@ import { spawn, buildSpawnPrompt } from "./spawn.mjs";
  *   @param {string[]} [task.tools]  explicit tool allowlist (panelist#72), forwarded to spawn.
  *   @param {string} [task.model]  per-call model tier (panelist#113), forwarded to spawn. Like
  *     task.tools, it does NOT change the rendered prompt — the output is byte-identical with or
- *     without it (see the NOTE below).
+ *     without it (see the NOTE below). Takes precedence over the persona's own `modelTier`
+ *     (panelist#119) when the persona record carries one.
  * @param {object} [deps]
  *   @param {function} [deps.buildPrompt]  override buildSpawnPrompt, same convention as spawn.
  * @returns {string} the rendered subagent prompt
@@ -57,6 +58,10 @@ export function renderRunnerPrompt(personaId, task = {}, deps = {}) {
 // (which model tier runs the call), not prompt-shaping, so the destructure above
 // deliberately omits it and the rendered prompt is byte-identical with or without
 // task.model. It flows through runPersona -> spawn -> client.complete, never here.
+// persona.modelTier (panelist#119, register-carried default) is the same class
+// again: resolved in spawn.mjs alongside task.model (per-call wins), never read
+// here, and never part of the rendered prompt (it is also absent from
+// PERSONA_FIELDS, so renderPersona/renderRunnerPrompt can't see it either way).
 
 /**
  * The generic agentic runner (D5): resolve a persona by id and run it for one
@@ -69,7 +74,8 @@ export function renderRunnerPrompt(personaId, task = {}, deps = {}) {
  * @param {object} task            same shape as spawn's opts: { mode, artifact, instruction?, responseSchema?, horizon?, tools?, model? }
  *   @param {string} [task.model]  per-call model tier (panelist#113); forwarded to spawn for
  *     free (this delegates wholesale), which passes it opaquely to client.complete. Omit to
- *     inherit the injected adapter's own model.
+ *     fall back to the persona's own `modelTier` (panelist#119), if the register carries one,
+ *     then to the injected adapter's own model if neither is set.
  * @param {object} [deps]
  *   @param {{model,complete}} [deps.client]  injected model client (default throws, same as spawn).
  *   @param {object} [deps.toolGate]          share a gate (isolation.mjs createToolGate) across a panel.

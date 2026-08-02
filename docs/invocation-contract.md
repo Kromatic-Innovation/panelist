@@ -39,6 +39,42 @@ spawn(
   catalog; that is the consumer's decision. This is the per-call sibling of
   `deps.client`'s adapter-level `model`, which remains the default when no
   per-call `model` is given.
+
+### Model tier resolution (panelist#119, companion to cwc#1879)
+
+A persona record may also carry an optional `modelTier` — a register-carried
+**default** model tier, so a consumer can declare "this panel runs at
+`sonnet`" once on the persona instead of passing `model` at every call site.
+It's the same kind of opaque, unvalidated string as `model` above (panelist
+does not check it against a provider catalog), and it is **execution-shaping,
+not prompt-shaping** — `renderRunnerPrompt`/`buildSpawnPrompt` never read it,
+so the rendered prompt is byte-identical with or without it.
+
+Resolution order, most specific wins:
+
+1. `opts.model` (explicit per-call, panelist#113) — always wins when given.
+2. `persona.modelTier` (register-carried default) — used when `opts.model` is
+   omitted.
+3. Neither set — the `model` key is left off the `complete()` call entirely,
+   same as today: `deps.client`'s own default model is used.
+
+```js
+registerPersonas([
+  { id: "reviewer", name: "Reviewer", role: "...", caresAbout: [...], rewards: [...], punishes: [...], quitsWhen: [...], modelTier: "sonnet" },
+]);
+
+await spawn("reviewer", { mode: "comment", artifact }, { client });
+// -> client.complete({ ..., model: "sonnet" })  (persona.modelTier used)
+
+await spawn("reviewer", { mode: "comment", artifact, model: "claude-haiku-4-5" }, { client });
+// -> client.complete({ ..., model: "claude-haiku-4-5" })  (opts.model wins)
+```
+
+A `registerPersonas` object source (`{ personas, rubrics?, usage?, modelTier?
+}`) may also carry a top-level `modelTier`, which becomes the default for
+every record from that source that doesn't already set its own — see
+[`src/lib/register.mjs`](../src/lib/register.mjs). A per-record `modelTier`
+always overrides the source-level one.
 - `deps.client` — injected model adapter (`{ model, complete }`). No live
   provider is bundled; the default throws.
 - `deps.toolGate` — optional: share one `isolation.mjs` `createToolGate()`
