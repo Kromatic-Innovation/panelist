@@ -130,6 +130,25 @@ takes over.
 
 ### Docs
 
+- **`isolation.tools` documented as the effective set, not a union across
+  differentiated reviewers ([#139](https://github.com/Kromatic-Innovation/panelist/issues/139), companion to
+  [zenodotus#82](https://github.com/Kromatic-Innovation/zenodotus/issues/82)).**
+  `unionTools`' docstring, the "Assembling a panel" bullet in
+  `docs/invocation-contract.md`, and the `src/index.mjs` export comment
+  previously described the panel-level `isolation.tools` as a union across
+  per-persona tool sets. That framing implied a per-reviewer allowlist
+  configuration surface that does not exist in either implementation:
+  `createToolGate` derives the allowlist from `opts.tools` alone, and the
+  `reviewer` it also takes is used only to attribute denials. Per
+  PANEL_VERDICT_SPEC **1.2**, the top-level value is now described as the
+  *effective set* applied uniformly across reviewers. Accumulating across
+  calls is unchanged and still correct — a provider may grant a different set
+  per call, and the accumulated value is the effective set the verdict was
+  produced under. Wording only; `unionTools`' implementation is untouched and
+  no observable behavior changes. Adds a lock-in test mirroring zenodotus's
+  ("two reviewers under one config resolve to identical allowlists") so the
+  two independent implementations cannot drift on what the field means.
+
 - **README and best-practices doc reconciled with actual cross-model and
   kill-floor behavior ([#87](https://github.com/Kromatic-Innovation/panelist/issues/87)).** README's "Cross-model panels" bullet and
   intro line read as if panelist enforced a ≥2-provider panel by default;

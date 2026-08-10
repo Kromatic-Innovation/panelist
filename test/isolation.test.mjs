@@ -126,7 +126,7 @@ test("createToolGate: propagates resolveEffectiveTools' wildcard rejection", () 
 
 // ── unionTools ────────────────────────────────────────────────────────────
 
-test("unionTools: unions isolation.tools across several per-persona records", () => {
+test("unionTools: accumulates isolation.tools across records into the effective set", () => {
   const records = [
     { isolation: { tools: ["web"] } },
     { isolation: { tools: ["recall", "web"] } },
@@ -139,4 +139,42 @@ test("unionTools: unions isolation.tools across several per-persona records", ()
 test("unionTools: empty input returns []", () => {
   assert.deepEqual(unionTools([]), []);
   assert.deepEqual(unionTools(undefined), []);
+});
+
+// PANEL_VERDICT_SPEC 1.2 lock-in (zenodotus#82): isolation.tools is the
+// EFFECTIVE set applied uniformly across reviewers, not a union across
+// differentiated per-reviewer allowlists. Mirrors the test zenodotus landed,
+// so the two independent implementations cannot drift on what the field means.
+test("isolation.tools is panel-wide: two reviewers under one config resolve to identical allowlists", () => {
+  const config = { tools: ["web", "recall"] };
+
+  const first = createToolGate({ ...config, reviewer: "skeptic" });
+  const second = createToolGate({ ...config, reviewer: "champion" });
+
+  // Same config + different reviewer id => same allowlist, always.
+  assert.deepEqual(first.tools, second.tools);
+  assert.deepEqual(first.tools, ["web", "recall"]);
+
+  // The reviewer identifier is attribution-only: it must not widen or narrow
+  // what is granted, only label who was denied.
+  assert.equal(first.check("web"), true);
+  assert.equal(second.check("web"), true);
+  assert.equal(first.check("shell"), false);
+  assert.equal(second.check("shell"), false);
+  assert.deepEqual(
+    first.denied.map((d) => d.reviewer),
+    ["skeptic"],
+  );
+  assert.deepEqual(
+    second.denied.map((d) => d.reviewer),
+    ["champion"],
+  );
+
+  // And the panel-level value over both records is that same effective set —
+  // accumulation adds nothing here precisely because nothing differentiates.
+  const panelTools = unionTools([
+    { isolation: { tools: first.tools } },
+    { isolation: { tools: second.tools } },
+  ]);
+  assert.deepEqual(panelTools, ["web", "recall"]);
 });

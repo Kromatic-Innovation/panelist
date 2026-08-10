@@ -156,10 +156,24 @@ export function buildIsolationEnvelope(effectiveTools, denied) {
 }
 
 /**
- * Union the `isolation.tools` of several per-persona records — for a caller
- * assembling a panel-level envelope out of N spawn() results, per the locked
- * shape's rule: "If tool sets differ per persona, top-level isolation.tools
- * is the union, and each per-persona record carries its own isolation.tools."
+ * Accumulate the `isolation.tools` of several per-persona records into the
+ * panel-level `isolation.tools` — the EFFECTIVE set the verdict was produced
+ * under (PANEL_VERDICT_SPEC 1.2, zenodotus#82).
+ *
+ * Read the top-level value as the effective set applied uniformly across
+ * reviewers — NOT as a union across differentiated per-reviewer allowlists.
+ * panelist has no per-reviewer allowlist configuration: createToolGate derives
+ * the allowlist from `opts.tools` alone, and the `reviewer` it also takes is
+ * used only to attribute denials (see recordDenial). Two reviewers under one
+ * config therefore always resolve to identical allowlists, so there is no
+ * per-reviewer differentiation for a union to range over.
+ *
+ * The accumulate-across-records behaviour is still correct and unchanged: a
+ * provider may grant a different set per CALL, and accumulating those granted
+ * sets is precisely what keeps the panel-level value the effective set the
+ * verdict was produced under. Each per-call record still carries its own
+ * `isolation.tools`.
+ *
  * @param {Array<{isolation?: {tools?: string[]}}>} records
  * @returns {string[]}
  */
