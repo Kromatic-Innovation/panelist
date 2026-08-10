@@ -104,8 +104,9 @@ export { stampHonesty, formatPanelSummary, assertHonestyStamped, HONESTY_MARKER 
 // Tool isolation (panelist#72) — deny persona tools by default; the deny/allow
 // decision as an independently testable unit. spawn()/runPersona() build a
 // gate from this internally; these are exported for callers assembling a
-// multi-persona panel (e.g. sharing one gate, or unioning per-persona
-// isolation.tools into a panel-level record).
+// multi-persona panel (e.g. sharing one gate, or accumulating per-call
+// isolation.tools into a panel-level record — the effective set the verdict
+// was produced under, not a union across differentiated reviewers).
 export {
   DISCOVERY_TOOLS,
   resolveEffectiveTools,

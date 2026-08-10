@@ -113,10 +113,17 @@ alone:
   before dispatching a tool call, or self-reports via
   `res.deniedToolCalls`, every attempted-but-denied call shows up in
   `isolation.denied` as `{ tool, reviewer, at }`.
-- **Assembling a panel.** If tool sets differ per persona across several
-  `spawn` calls, `isolation.mjs`'s `unionTools([...results])` gives the
-  panel-level union; each per-call result still carries its own
-  `isolation.tools`.
+- **Assembling a panel.** `isolation.mjs`'s `unionTools([...results])`
+  accumulates the granted sets from several `spawn` calls into the
+  panel-level `isolation.tools`; each per-call result still carries its own
+  `isolation.tools`. Read that top-level value as the **effective set**
+  applied uniformly across reviewers — *not* as a union across differentiated
+  per-reviewer allowlists. The allowlist is panel-wide: it comes from
+  `opts.tools` alone, and the reviewer identifier is used only to attribute
+  denials, so two reviewers under one config always resolve to identical
+  allowlists. Accumulating across calls still matters because a provider may
+  grant a different set per call, and the effective set is what the verdict
+  was produced under.
 
 See [`src/lib/isolation.mjs`](../src/lib/isolation.mjs) for the deny/allow
 decision as an independently testable unit.
