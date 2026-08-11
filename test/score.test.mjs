@@ -170,6 +170,28 @@ test("scoreCandidate honors an explicit temperature of 0 (nullish, not falsy, co
   assert.equal(captured[0].temperature, 0);
 });
 
+// ── panelist#144: per-entry temperature/maxTokens override ───────────────
+
+test("a panel entry's own temperature/maxTokens overrides the run-level deps default for that entry only", async () => {
+  const capturedA = [];
+  const capturedB = [];
+  const overridden = { ...capturingScorer("reasoning-model", GOOD, capturedA), temperature: 1, maxTokens: 2048 };
+  const plain = capturingScorer("claude-x", GOOD, capturedB);
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: [overridden, plain], temperature: 0, maxTokens: 512 });
+  assert.equal(capturedA[0].temperature, 1, "the overriding entry gets its OWN temperature");
+  assert.equal(capturedA[0].maxTokens, 2048, "the overriding entry gets its OWN maxTokens");
+  assert.equal(capturedB[0].temperature, 0, "the plain entry still gets the run-level default");
+  assert.equal(capturedB[0].maxTokens, 512, "the plain entry still gets the run-level default");
+});
+
+test("a panel entry may declare temperature: undefined to suppress the field entirely, distinct from omitting the property", async () => {
+  const captured = [];
+  const suppressed = { ...capturingScorer("reasoning-model", GOOD, captured), temperature: undefined };
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: [suppressed], temperature: 0 });
+  assert.equal("temperature" in captured[0], true, "the key is still passed through to complete()");
+  assert.equal(captured[0].temperature, undefined, "but its value is undefined, not the run-level 0");
+});
+
 // ── PAN-16: panel-size + diagnosable failure causes (panelist#85) ───────────
 
 test("panelSize and panelistsReported reflect a fully-successful run", async () => {

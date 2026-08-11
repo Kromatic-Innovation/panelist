@@ -12,7 +12,16 @@
 //
 // ADAPTER CONTRACT (a "panelist" / "client"):
 //   { model: string, complete: async ({ prompt, maxTokens, temperature, tools }) =>
-//       { ok: true, text: string, model?: string, deniedToolCalls?: array } | { ok: false, reason?: string } }
+//       { ok: true, text: string, model?: string, deniedToolCalls?: array } | { ok: false, reason?: string },
+//     temperature?: number, maxTokens?: number }
+//
+// PER-ENTRY temperature/maxTokens (panelist#144): an entry may declare its own
+// `temperature`/`maxTokens`, which scoreCandidate then sends to THAT entry's
+// complete() calls instead of the run-level deps.temperature/deps.maxTokens —
+// for a panel member whose provider rejects (or requires) a value the rest of
+// the panel doesn't. Checked via `"temperature" in entry`, so an entry may set
+// `temperature: undefined` to suppress the field for itself entirely rather
+// than inherit the run default. Entries that omit the property are unaffected.
 //
 // Isolation (panelist#72/#77): deny by default via deps.tools/deps.toolGate
 // (isolation.mjs's createToolGate), same posture as spawn.mjs/junction.mjs. The
@@ -311,7 +320,9 @@ function spansMultipleProviders(modelIds) {
  *   @param {number}   [deps.concurrency]
  *   @param {function} [deps.limiter]
  *   @param {number}   [deps.maxTokens]     override SCORE_MAX_TOKENS (panelist#85).
- *   @param {number}   [deps.temperature]   override DEFAULT_TEMPERATURE (panelist#85).
+ *   @param {number}   [deps.temperature]   override DEFAULT_TEMPERATURE (panelist#85). A panel
+ *     entry's own `temperature` (declared as a property on the entry itself, panelist#144) takes
+ *     precedence over this for that entry's calls only.
  * @returns {Promise<object>}
  */
 export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
@@ -347,11 +358,20 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   }
   const maxTokens = deps.maxTokens ?? SCORE_MAX_TOKENS;
   const temperature = deps.temperature ?? DEFAULT_TEMPERATURE;
+  // PANELIST#144: a cross-model panel can mix a provider that rejects an
+  // explicit temperature/maxTokens (e.g. a reasoning model locked to its own
+  // default) with providers that accept the run-level value. A panel entry
+  // may declare its OWN `temperature`/`maxTokens`, taking precedence over the
+  // run-level default for that entry only — checked via `in`, not `??`, so an
+  // entry can deliberately set `temperature: undefined` to suppress the field
+  // entirely rather than inherit the run default.
   const settled = await Promise.all(
     tasks.map((t) =>
       run(async () => {
         try {
-          return await t.panelist.complete({ prompt: t.prompt, maxTokens, temperature, tools: gate.tools });
+          const taskMaxTokens = "maxTokens" in t.panelist ? t.panelist.maxTokens : maxTokens;
+          const taskTemperature = "temperature" in t.panelist ? t.panelist.temperature : temperature;
+          return await t.panelist.complete({ prompt: t.prompt, maxTokens: taskMaxTokens, temperature: taskTemperature, tools: gate.tools });
         } catch {
           return { ok: false, reason: "threw" };
         }
