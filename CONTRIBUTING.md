@@ -63,19 +63,30 @@ issue.
 
 ## Releasing
 
-panelist publishes to two registries: GitHub Packages on a GitHub Release
-(`.github/workflows/publish.yml`, internal/org consumers) and public npm on
-a version tag (`.github/workflows/release.yml`, `panelist`
-on `https://registry.npmjs.org`). To cut a release:
+panelist has exactly **one** publish path: the public npm registry, as the
+unscoped package `panelist` on `https://registry.npmjs.org`, published by
+`.github/workflows/release.yml` when a `v*` tag is pushed. There is no second
+registry and no second publish workflow. To cut a release:
 
 1. Bump `version` in `package.json` and `PANELIST_VERSION` in `src/index.mjs`
    to the same value — they must stay in sync.
 2. Add a `CHANGELOG.md` entry for the new version under
    `## [X.Y.Z] - YYYY-MM-DD`, moving relevant `[Unreleased]` notes into it.
-3. Commit, then tag the release commit `vX.Y.Z` and push the tag. Pushing a
-   `v*` tag triggers `release.yml`, which publishes to public npm.
-4. Cut a corresponding GitHub Release for the tag, which triggers
-   `publish.yml` for the GitHub Packages side.
+3. Commit the bump on `develop` and merge it via PR as usual.
+4. Promote `develop` → `main` (the `Promote Main` workflow,
+   `.github/workflows/promote-main.yml`), so the release commit is on `main`.
+5. Tag that commit `vX.Y.Z` **on `main`** and push the tag. Pushing a `v*` tag
+   triggers `release.yml`, which publishes to public npm.
+
+**The tag must be on `main`.** `release.yml` fires from a `v*` tag pushed from
+any ref, so it defends itself: it hard-fails the job if the tagged commit is
+not an ancestor of `origin/main` (`git merge-base --is-ancestor "$GITHUB_SHA"
+origin/main`). Tag before promoting and the publish is rejected, not silently
+released from unmerged code.
+
+Cutting a GitHub Release for the tag afterwards is still a good practice for
+publishing release notes — but it is **not** a publish trigger. Nothing runs on
+`release: published` any more; the pushed tag is what publishes.
 
 **Pre-1.0 (0.x) semver rule:** while panelist is `0.x`, MINOR bumps (`0.x.0`)
 may include breaking changes and PATCH bumps (`0.0.x`) are for fixes only —
@@ -91,14 +102,3 @@ after that runs through `release.yml` on a pushed `v*` tag with zero stored
 secrets. A `workflow_dispatch` dry run is available at any time for validating
 the pipeline without cutting a release. See `.github/workflows/release.yml` for
 the authoritative auth model.
-
-**Why `package.json`'s checked-in `publishConfig.registry` points at GitHub
-Packages.** This is intentional, not stale: `publish.yml` (internal/org side)
-relies on the checked-in `publishConfig.registry` pointing at
-`npm.pkg.github.com` to publish there. For the public-npm side, `release.yml`
-deliberately runs `npm pkg delete publishConfig.registry` before publishing,
-stripping it in-CI so that publish routes to the default `registry.npmjs.org`
-instead. So if you're reading `package.json` cold and wondering why it's
-pinned to GitHub Packages when consumers install from public npm — that's
-why: the pin is for one workflow, and the other workflow removes it before it
-ever reaches npmjs.org.
