@@ -100,25 +100,33 @@ registerPersonas(reviewPack);
 const client = {
   model: "your-model",
   async complete({ prompt }) {
-    // call your provider with `prompt`, return its raw text
+    // Call your provider with `prompt` and return its raw text. The reply must
+    // be a JSON object in the wrapper's own shape — `verdict` (per the
+    // `responseSchema` you supplied) and `message` — not an ad-hoc shape.
     return {
       ok: true,
-      text: '{ "verdict": "keep", "note": "stub" }',
+      text: '{ "verdict": { "pass": false, "frictionPoint": "install command buried" }, "message": "stub" }',
       model: "your-model",
     };
   },
 };
 
 const readmeText = "# my-project\n\nInstall: npm i my-project\n"; // the draft under review
-const verdict = await spawn(
+const result = await spawn(
   "drive-by-installer",
   {
     mode: "vote",
     artifact: readmeText,
     instruction: "Would you stop reading before you found the install command?",
+    // `verdict` is filled IFF you supply a `responseSchema`. Omit this and
+    // `result.verdict` comes back `null`, whatever the client returned.
+    responseSchema: { pass: "boolean", frictionPoint: "string" },
   },
   { client },
 );
+
+console.log(result.verdict);
+// { pass: false, frictionPoint: 'install command buried' }
 ```
 
 ## Persona packs (toggleable)

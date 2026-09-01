@@ -25,7 +25,8 @@
   },
   "files": [
     "src",
-    "packs"
+    "packs",
+    "NOTICE"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
