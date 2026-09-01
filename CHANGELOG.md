@@ -232,6 +232,22 @@ takes over.
 
 ### Fixed
 
+- **Polynomial ReDoS in the markdown-fence regex of `extractJsonObject()`
+  ([#122](https://github.com/Kromatic-Innovation/panelist/issues/122), CodeQL alert 10, `js/polynomial-redos`, high).** The regex in
+  `src/lib/score.mjs` carried an ambiguous quantifier pair — a `\s*` sitting
+  immediately before the lazy `([\s\S]*?)` — so an unterminated fence followed
+  by a long whitespace run made the engine retry every split point between the
+  two, giving quadratic time in the length of that run. Reachable from
+  untrusted input: `extractJsonObject` parses model reply text (via
+  `extractScore`), which in a panel run can carry attacker-influenced artifact
+  content. The `\s*` is dropped; it was redundant, since the next line already
+  does `fence[1].trim()`. Behavior-identical for every input (both patterns
+  accept the same language, and the only difference — whether leading
+  whitespace lands in `\s*` or in the capture group — is erased by that
+  `trim()`), so no existing test changed. Measured on a 50k-space
+  unterminated fence: ~280ms before, ~0.2ms after (~4.7s vs. ~0.1ms at 200k).
+  Regression coverage in `test/score-units.test.mjs`.
+
 - **The honesty caveat is now auto-stamped on every public output surface,
   not just some of them ([#81](https://github.com/Kromatic-Innovation/panelist/issues/81)).** An audit found 8 public surfaces that did
   not carry the `honesty` field despite the docs/README claiming "every
