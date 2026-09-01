@@ -98,9 +98,12 @@ test("extractJsonObject: unterminated fence with a long whitespace run completes
   const got = extractJsonObject(evil);
   const elapsedMs = performance.now() - started;
   assert.equal(got, null);
-  // Sub-millisecond in practice; the vulnerable regex took ~280ms at 50k and
-  // ~4.7s at 200k. Bound kept loose so a loaded CI runner cannot flake it.
-  assert.ok(elapsedMs < 1000, `extraction took ${elapsedMs.toFixed(1)}ms`);
+  // Sub-millisecond in practice (~0.25ms); the vulnerable regex took ~280ms at
+  // this size. The bound has to sit BETWEEN those two or it fails to guard
+  // anything: 50ms is ~200x headroom over the fixed path and ~5.6x below the
+  // vulnerable one, so it cannot flake on a loaded runner yet still goes red if
+  // the ambiguous `\s*` is ever reintroduced (verified by putting it back).
+  assert.ok(elapsedMs < 50, `extraction took ${elapsedMs.toFixed(1)}ms`);
 });
 
 test("extractScore ignores a bare JSON array (no axis keys to read)", () => {
