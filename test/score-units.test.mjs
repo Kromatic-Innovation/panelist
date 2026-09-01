@@ -66,6 +66,43 @@ test("extractJsonObject returns null on unusable input", () => {
   assert.equal(extractJsonObject(42), null);
 });
 
+// ── extractJsonObject: fence-regex ReDoS regression (#122, CodeQL alert #10) ──
+// The fence regex used to carry an ambiguous `\s*` before its lazy group, which
+// backtracked polynomially on an unterminated fence followed by a long
+// whitespace run. These pin the extraction paths that must keep working plus
+// the timing bound the fix buys.
+
+test("extractJsonObject: json-tagged fence", () => {
+  assert.deepEqual(extractJsonObject('```json\n{"a":1}\n```'), { a: 1 });
+});
+
+test("extractJsonObject: untagged fence", () => {
+  assert.deepEqual(extractJsonObject('```\n{"a":1}\n```'), { a: 1 });
+});
+
+test("extractJsonObject: blank lines and spaces after the opening fence", () => {
+  assert.deepEqual(extractJsonObject('```json   \n\n\n   {"a":1}\n\n```'), { a: 1 });
+  assert.deepEqual(extractJsonObject('```\n\n  \n{"a":1}\n```'), { a: 1 });
+});
+
+test("extractJsonObject: bare object with no fence", () => {
+  assert.deepEqual(extractJsonObject('{"a":1}'), { a: 1 });
+});
+
+test("extractJsonObject: unterminated fence with a long whitespace run completes fast", () => {
+  // The trailing "x" matters: extractJsonObject trims its input first, so a run
+  // of whitespace at the very end would be stripped before the regex ever saw
+  // it and the test would pass even against the vulnerable pattern.
+  const evil = "```json" + " ".repeat(50_000) + "x";
+  const started = performance.now();
+  const got = extractJsonObject(evil);
+  const elapsedMs = performance.now() - started;
+  assert.equal(got, null);
+  // Sub-millisecond in practice; the vulnerable regex took ~280ms at 50k and
+  // ~4.7s at 200k. Bound kept loose so a loaded CI runner cannot flake it.
+  assert.ok(elapsedMs < 1000, `extraction took ${elapsedMs.toFixed(1)}ms`);
+});
+
 test("extractScore ignores a bare JSON array (no axis keys to read)", () => {
   // extractJsonObject accepts any typeof-object (arrays included), but extractScore
   // then finds no requested axis on an array and correctly yields null.
