@@ -66,7 +66,7 @@ test("extractJsonObject returns null on unusable input", () => {
   assert.equal(extractJsonObject(42), null);
 });
 
-// ── extractJsonObject: fence-regex ReDoS regression (#122, CodeQL alert #10) ──
+// ── extractJsonObject: fence-regex ReDoS regression (panelist#122, CodeQL alert 10)
 // The fence regex used to carry an ambiguous `\s*` before its lazy group, which
 // backtracked polynomially on an unterminated fence followed by a long
 // whitespace run. These pin the extraction paths that must keep working plus

@@ -262,7 +262,7 @@ export function extractJsonObject(text) {
   let body = text.trim();
   // NOTE: no `\s*` before the lazy group — that quantifier pair is ambiguous and
   // gives polynomial backtracking on an unterminated fence followed by a long
-  // whitespace run (CodeQL js/polynomial-redos, alert #10; panelist#122). It is
+  // whitespace run (CodeQL js/polynomial-redos, alert 10; panelist#122). It is
   // also redundant: `fence[1].trim()` below strips the same leading whitespace.
   const fence = body.match(/```(?:json)?([\s\S]*?)```/i);
   if (fence) body = fence[1].trim();

@@ -215,7 +215,7 @@ takes over.
 ### Fixed
 
 - **Polynomial ReDoS in the markdown-fence regex of `extractJsonObject()`
-  ([#122](https://github.com/Kromatic-Innovation/panelist/issues/122), CodeQL alert #10, `js/polynomial-redos`, high).** The regex in
+  ([#122](https://github.com/Kromatic-Innovation/panelist/issues/122), CodeQL alert 10, `js/polynomial-redos`, high).** The regex in
   `src/lib/score.mjs` carried an ambiguous quantifier pair — a `\s*` sitting
   immediately before the lazy `([\s\S]*?)` — so an unterminated fence followed
   by a long whitespace run made the engine retry every split point between the
