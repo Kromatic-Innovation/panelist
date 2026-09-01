@@ -99,6 +99,5 @@ manual step is the *bootstrap*: npm can only attach a Trusted Publisher to a
 package that already exists, so the **first** publish for the package had to be
 a manual `npm publish` from a maintainer's logged-in machine. Every release
 after that runs through `release.yml` on a pushed `v*` tag with zero stored
-secrets. A `workflow_dispatch` dry run is available at any time for validating
-the pipeline without cutting a release. See `.github/workflows/release.yml` for
-the authoritative auth model.
+secrets — that tag push is the workflow's only trigger. See
+`.github/workflows/release.yml` for the authoritative auth model.
