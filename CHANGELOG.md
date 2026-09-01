@@ -13,6 +13,8 @@ takes over.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-01
+
 **Minor under pre-1.0 semantics** — changes an observable verdict.
 
 ### Changed

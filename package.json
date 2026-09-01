@@ -1,6 +1,6 @@
 {
   "name": "panelist",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Synthetic user panels for any artifact, run across multiple model providers to correct for self-preference bias — models the exact point a persona quits, dismisses, or refuses to click, not a warmth score.",
   "license": "Apache-2.0",
   "homepage": "https://github.com/Kromatic-Innovation/panelist#readme",
