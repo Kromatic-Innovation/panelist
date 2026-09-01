@@ -16,7 +16,7 @@
 // test suite (test/honesty-gate.test.mjs) over real plane outputs, so no
 // summary can silently omit the caveat. A live PromptFoo/LiteLLM provider
 // remains a later slice.
-export const PANELIST_VERSION = "0.3.0";
+export const PANELIST_VERSION = "0.4.0";
 
 // Registry — compose personas/rubrics at runtime.
 export {
