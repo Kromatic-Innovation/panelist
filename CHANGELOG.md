@@ -146,6 +146,19 @@ takes over.
   from "panelist"` (`src/index.mjs`) is unaffected. Pure structural move —
   no behavior change.
 
+- **A total panel failure no longer returns a passing verdict ([#80](https://github.com/Kromatic-Innovation/panelist/issues/80)).** When
+  every panelist failed, `scoreCandidate` fell back to a neutral 5 on every
+  axis and *derived* the verdict — but the neutral 5 collides with the default
+  `cut_threshold` of 5.0, and `decideVerdict` cuts only on
+  `overall < cut_threshold`, so a total provider outage returned
+  `verdict: "keep"`. A programmatic gate (`if (result.verdict === "keep")
+  publish()`) therefore published everything during an outage. The
+  neutral-fallback verdict is now pinned to `"cut"` (fail-closed) rather than
+  derived; the neutral scores and the "REQUIRES HUMAN REVIEW" note are still
+  reported for human context. The magic `5` is now the named constant
+  `NEUTRAL_FALLBACK_SCORE`, defined next to `DEFAULT_CUT_THRESHOLD` so the
+  collision is visible at the point of definition.
+
 ### Docs
 
 - **`isolation.tools` documented as the effective set, not a union across
@@ -287,19 +300,6 @@ takes over.
   `src/lib/spawn.mjs`'s JSDoc) to include the `honesty` field, and rewrote
   `docs/invocation-contract.md`'s "Forward-compat" note (previously said
   the stamp was "not yet added") to describe the now-shipped behavior.
-
-- **A total panel failure no longer returns a passing verdict ([#80](https://github.com/Kromatic-Innovation/panelist/issues/80)).** When
-  every panelist failed, `scoreCandidate` fell back to a neutral 5 on every
-  axis and *derived* the verdict — but the neutral 5 collides with the default
-  `cut_threshold` of 5.0, and `decideVerdict` cuts only on
-  `overall < cut_threshold`, so a total provider outage returned
-  `verdict: "keep"`. A programmatic gate (`if (result.verdict === "keep")
-  publish()`) therefore published everything during an outage. The
-  neutral-fallback verdict is now pinned to `"cut"` (fail-closed) rather than
-  derived; the neutral scores and the "REQUIRES HUMAN REVIEW" note are still
-  reported for human context. The magic `5` is now the named constant
-  `NEUTRAL_FALLBACK_SCORE`, defined next to `DEFAULT_CUT_THRESHOLD` so the
-  collision is visible at the point of definition.
 
 - **CI now actually runs `npm run drift`, matching what CONTRIBUTING.md
   claimed all along ([#83](https://github.com/Kromatic-Innovation/panelist/issues/83)).** `CONTRIBUTING.md` asserted CI runs both
