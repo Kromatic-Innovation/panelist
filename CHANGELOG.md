@@ -17,24 +17,6 @@ takes over.
 
 **Minor under pre-1.0 semantics** — changes an observable verdict.
 
-### Changed
-
-- **GitHub Packages publishing retired in favor of public npm
-  ([#123](https://github.com/Kromatic-Innovation/panelist/issues/123)).**
-  `.github/workflows/publish.yml`, which published a second, org-scoped copy of
-  every release to GitHub Packages as `@kromatic-innovation/panelist` on
-  `release: published`, has been deleted. panelist now has exactly one publish
-  path: the unscoped `panelist` package on the public npm registry, published by
-  `.github/workflows/release.yml` on a pushed `v*` tag via OIDC Trusted
-  Publishing. Consumers already installed from public npm, so no install
-  instructions change. `package.json`'s `publishConfig.registry` pin to
-  `npm.pkg.github.com` — which existed solely for the retired workflow, and
-  which `release.yml` stripped in-CI before every public publish — has been
-  removed with it. Nothing already published to GitHub Packages was unpublished;
-  this only stops future publishes. Also closes the Scorecard
-  `TokenPermissionsID` alert for the deleted workflow's top-level
-  `packages: write` scope.
-
 ### Added
 
 - **Persona records may carry an optional register-carried `modelTier`
@@ -122,6 +104,22 @@ takes over.
   unchanged for back-compat; all new fields are additive.
 
 ### Changed
+
+- **GitHub Packages publishing retired in favor of public npm
+  ([#123](https://github.com/Kromatic-Innovation/panelist/issues/123)).**
+  `.github/workflows/publish.yml`, which published a second, org-scoped copy of
+  every release to GitHub Packages as `@kromatic-innovation/panelist` on
+  `release: published`, has been deleted. panelist now has exactly one publish
+  path: the unscoped `panelist` package on the public npm registry, published by
+  `.github/workflows/release.yml` on a pushed `v*` tag via OIDC Trusted
+  Publishing. Consumers already installed from public npm, so no install
+  instructions change. `package.json`'s `publishConfig.registry` pin to
+  `npm.pkg.github.com` — which existed solely for the retired workflow, and
+  which `release.yml` stripped in-CI before every public publish — has been
+  removed with it. Nothing already published to GitHub Packages was unpublished;
+  this only stops future publishes. Also closes the Scorecard
+  `TokenPermissionsID` alert for the deleted workflow's top-level
+  `packages: write` scope.
 
 - **De-duplicated `normalizeReportedDenial` across the three execution
   planes ([#90](https://github.com/Kromatic-Innovation/panelist/issues/90)).** `score.mjs`, `spawn.mjs`, and `junction.mjs` each defined
