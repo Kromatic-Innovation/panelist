@@ -15,7 +15,8 @@ takes over.
 
 ## [0.4.0] - 2026-09-01
 
-**Minor under pre-1.0 semantics** — changes an observable verdict.
+**Minor under pre-1.0 semantics** — a total panel failure now returns
+`verdict: "cut"` where it previously returned `"keep"` (see **Changed**).
 
 ### Added
 
