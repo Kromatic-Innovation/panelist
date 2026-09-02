@@ -13,6 +13,18 @@ takes over.
 
 ## [Unreleased]
 
+### Docs
+
+- **Rubric reference for `score()`
+  ([#174](https://github.com/Kromatic-Innovation/panelist/issues/174)).**
+  `docs/invocation-contract.md` now documents every caller-settable field on the
+  `rubric` object — `axes`, `killAxes`, `killFloor`, `cut_threshold`, `quorum` —
+  with each field's default read from `normalizeRubric`, the two accepted shapes
+  of `axes` (and why `axisDescriptions` is not a field you set), and the
+  fall-back-never-throws normalization rule, including that `killFloor` and
+  `cut_threshold` are finite-checked but **not** range-checked while `quorum` is.
+  `cut_threshold` previously appeared nowhere in `docs/` at all.
+
 ## [0.4.1] - 2026-09-02
 
 **This patch moves an observable verdict.** A panel that runs but comes back
