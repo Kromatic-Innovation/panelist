@@ -3,6 +3,34 @@
 Thanks for your interest in improving panelist. This is a small, focused
 library — please keep contributions scoped and traceable.
 
+## Who maintains panelist
+
+panelist is maintained by **Kromatic** (the
+[Kromatic-Innovation](https://github.com/Kromatic-Innovation) GitHub
+organization), which is the accountable party for this project. Contact paths:
+
+- **Security vulnerabilities** — email `security@kromatic.com` privately. See
+  [`SECURITY.md`](SECURITY.md) for what to include and the response times we
+  commit to there.
+- **Everything else** — the
+  [issue tracker](https://github.com/Kromatic-Innovation/panelist/issues).
+
+Be aware of how this project is actually run, so you can judge for yourself
+whether to depend on it:
+
+- Most commits here are authored by automation running under Kromatic's
+  direction, not typed by hand. There is no dedicated review team, and we do
+  **not** offer a response-time commitment on pull requests or feature
+  requests. The response times in `SECURITY.md` cover security reports only.
+- Accountability sits with the organization rather than a single named
+  individual on purpose: `security@kromatic.com` is an organizational mailbox
+  and Kromatic-Innovation organization owners retain admin on this repository,
+  so neither contact path depends on one person remaining reachable.
+- If Kromatic ever stops maintaining panelist, the project is Apache-2.0
+  licensed and its full history is public — forking it is always available to
+  you and needs no permission from us. We would rather say that plainly than
+  imply a succession plan we have not staffed.
+
 ## Getting started
 
 ```bash
