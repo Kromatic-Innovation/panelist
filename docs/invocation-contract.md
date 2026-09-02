@@ -192,6 +192,51 @@ contract.
 Use `score` for a rubric-driven verdict across a panel. Use `spawn` for one
 persona's reaction, vote, or comment on demand.
 
+### Rubric reference
+
+Every field below is caller-settable on the `rubric` object passed to `score()`
+/ `scoreCandidate()`. The defaults are `normalizeRubric`'s, in
+`src/lib/score.mjs`.
+
+| Field           | Accepts                                                                                                     | Default                                                |
+| --------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `axes`          | an array of axis names, **or** an object whose keys are axis names and whose values are per-axis descriptions | `["resonance", "clarity", "credibility", "scrollStop"]` |
+| `killAxes`      | an array of axis names                                                                                       | `[]`                                                    |
+| `killFloor`     | a finite number                                                                                              | `4.0`                                                   |
+| `cut_threshold` | a finite number                                                                                              | `5.0`                                                   |
+| `quorum`        | a finite number in `[0, 1]` inclusive                                                                        | `0.5`                                                   |
+
+**`axes` accepts two shapes, and the object form does double duty.** An array
+simply names the axes. An object *also* supplies a description per axis: its
+keys become the axes, and the object itself is retained internally as
+`axisDescriptions` so the prompt can explain each axis to the panel.
+`axisDescriptions` is derived from `axes` — it is not a separate field a caller
+sets.
+
+**Normalization never throws — it falls back.** A value that fails validation
+is replaced by that field's default rather than raising. This makes a bad
+rubric value silent, not loud: `cut_threshold: "7"` (a string, not a number)
+scores against `5.0`, and nothing in the result says so.
+
+**The validation is asymmetric, and the asymmetry is deliberate.** `killFloor`
+and `cut_threshold` are checked with `Number.isFinite` only — there is **no
+range check** — so a `cut_threshold` of `50` (nothing ever passes) or `-3`
+(everything does) is accepted exactly as given. `quorum` is the one field that
+is additionally range-checked: outside `[0, 1]` it falls back to `0.5`.
+
+`quorum` has a defined meaning at each end of that range. `0` disables the
+floor — `required` becomes 1, so a single reporting panelist is enough — and
+`1` demands that the whole attempted panel report. In between, the requirement
+is strict (`floor(panelSize × quorum) + 1`, clamped to the panel size), which
+is why the default `0.5` means a strict majority rather than "at least half".
+All three feed the `quorum` envelope described above without changing its
+shape.
+
+One thing `quorum: 0` does **not** do is reopen panelist#80: a panel where
+*nobody* reports returns from the total-panel-failure branch before the quorum
+check is ever reached, so disabling the floor cannot resurrect a verdict
+derived from an empty panel.
+
 ## Verdict schema (Decision D3 — resolved)
 
 **Decision:** `verdict` is an **open object, validated per the
