@@ -24,6 +24,13 @@ takes over.
   fall-back-never-throws normalization rule, including that `killFloor` and
   `cut_threshold` are finite-checked but **not** range-checked while `quorum` is.
   `cut_threshold` previously appeared nowhere in `docs/` at all.
+- **`README.md` signposts the canonical package
+  ([#175](https://github.com/Kromatic-Innovation/panelist/issues/175)).** The
+  install section now states that the unscoped `panelist` on npmjs.org is the
+  canonical package, and that any `@kromatic-innovation/panelist` on GitHub
+  Packages is a retired publish path that receives no further releases — so a
+  consumer who finds the scoped listing first is pointed at the current package
+  instead of a stale one.
 
 ## [0.4.1] - 2026-09-02
 
