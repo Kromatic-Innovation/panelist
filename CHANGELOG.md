@@ -13,6 +13,33 @@ takes over.
 
 ## [Unreleased]
 
+**This patch pins another verdict channel closed.** On a *total* panel outage
+(zero panelists reported at all), `verdict` is now library-pinned to `"cut"`
+even when the run supplies a custom `deps.fallback` — that callback's own
+`verdict` (a passing `"keep"`, an off-vocabulary value, or an omitted field)
+is overwritten. This affects only callers who pass `deps.fallback` to `score`
+/ `scoreCandidate` / `rankCandidatesWith`; the built-in fallback already
+returned `"cut"` and is unaffected, and panels that report at least one
+panelist are unaffected. The change is fail-closed by design, the same
+posture `0.4.0` gave the built-in fallback and `0.4.1` gave partial quorum
+attrition — see **Fixed**.
+
+### Fixed
+
+- **A custom `deps.fallback` could return a passing verdict on a completely
+  dead panel, or omit/garble `verdict` so the candidate vanished from both
+  `rankCandidatesWith`'s `shortlist` and `cut`
+  ([#176](https://github.com/Kromatic-Innovation/panelist/issues/176)).** On
+  the `byPersona.length === 0` branch of `scoreCandidate`, `verdict` is now
+  pinned to `FALLBACK_VERDICT` (`"cut"`) unconditionally, regardless of what a
+  custom `deps.fallback` returned. Every other field the fallback emitted —
+  `scores`, `aggregate`, `note`, `fallback`, and arbitrary caller-added keys —
+  still passes through untouched. The same path also closes a crash: a custom
+  fallback that omits `aggregate` (or emits a non-finite `aggregate.overall`)
+  previously threw inside `rankCandidatesWith`'s sort; a missing/non-finite
+  `aggregate.overall` on this path now defaults to `0` so the sort stays
+  total.
+
 ### Docs
 
 - **Rubric reference for `score()`

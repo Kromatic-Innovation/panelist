@@ -180,9 +180,14 @@ when `met` is `false`. When fewer than `required` panelists report, `verdict`
 is *pinned* to `"cut"` rather than derived from the survivors — the survivors'
 scores and `aggregate` are still reported for human context, and only the
 machine-readable verdict fails closed. The built-in total-panel-failure
-fallback returns the same keys plus `fallback: true`; a caller who replaces it
-via `deps.fallback` is under no obligation to emit any of them, so guard when
-reading these off an arbitrary result.
+fallback returns the same keys plus `fallback: true`. On a *total* panel
+failure (zero panelists reported at all), `verdict` is library-pinned to
+`"cut"` even when a caller replaces the fallback via `deps.fallback` — a
+custom fallback cannot raise it back to `"keep"`, return an off-vocabulary
+value, or omit it and have that silently pass through (panelist#176). Every
+other key — `scores`, `aggregate`, `note`, `fallback`, and any caller-added
+key — is still whatever the custom fallback emitted, with no obligation to
+provide any of them, so guard when reading these off an arbitrary result.
 
 `spawn.mjs` is call-shaped: one `personaId`, one `{ mode, artifact, ... }`,
 one wrapper. Today that's a single model call; it's the foundation the

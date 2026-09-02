@@ -483,12 +483,37 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
 
   if (byPersona.length === 0) {
     const fb = deps.fallback || neutralFallback;
+    const raw = fb(cand, panelistsFailed, norm, { panelSize: tasks.length, failuresByCause });
     // A custom deps.fallback replaces neutralFallback wholesale, including its
     // honesty stamp — post-process through stampHonesty here so the caller's
     // callback can't accidentally drop the caveat (panelist#81, PAN-03).
     // stampHonesty is idempotent, so the built-in neutralFallback path (already
     // stamped) is unaffected. Same usage resolution neutralFallback uses.
-    return stampHonesty(fb(cand, panelistsFailed, norm, { panelSize: tasks.length, failuresByCause }), USAGE_HEADER);
+    //
+    // PIN, don't derive (panelist#176). byPersona.length === 0 means zero
+    // panelists produced a usable score — there is no information in that
+    // state from which any verdict but FALLBACK_VERDICT can be honestly
+    // derived. A custom fallback's own `verdict` (a passing "keep", an
+    // off-vocabulary string, or an omitted field entirely) is OVERWRITTEN
+    // here unconditionally; the built-in neutralFallback already returns
+    // FALLBACK_VERDICT, so this is a no-op on that path. Every other field —
+    // scores, note, fallback, arbitrary caller keys — passes through
+    // untouched; only `verdict` and `aggregate.overall` are touched, not the
+    // whole object (panelist#176 AC2). The `aggregate.overall` default below
+    // closes the same-path crash where a custom fallback omitting `aggregate`
+    // (or emitting a non-finite `overall`) previously threw inside
+    // rankCandidatesWith's sort (panelist#176 AC3).
+    return stampHonesty(
+      {
+        ...raw,
+        verdict: FALLBACK_VERDICT,
+        aggregate: {
+          ...(raw && raw.aggregate),
+          overall: Number.isFinite(raw?.aggregate?.overall) ? raw.aggregate.overall : 0,
+        },
+      },
+      USAGE_HEADER,
+    );
   }
 
   const aggregate = aggregateAxes(byPersona, norm.axes);
