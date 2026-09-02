@@ -79,6 +79,53 @@ const DEFAULT_TEMPERATURE = 0;
 const NEUTRAL_FALLBACK_SCORE = 5;
 const FALLBACK_VERDICT = "cut";
 
+// QUORUM (panelist#167). panelist#80 pinned the endpoint and left the slope: the
+// fail-closed branch above fires only when the WHOLE panel fails
+// (`byPersona.length === 0`). One panelist short of that
+// (`panelistsFailed === panelSize - 1`) the verdict was still DERIVED from
+// whoever survived — and a lone survivor returning neutral 5s hits the same
+// `5 < 5 === false` boundary, so a 19-of-20 provider outage returned "keep".
+//
+// DEFAULT_QUORUM is the fraction of the panel that must report before a derived
+// verdict is trusted. The requirement is STRICT (`> quorum × panelSize`, i.e.
+// `floor(panelSize × quorum) + 1`, clamped to panelSize), so the default 0.5
+// means a STRICT MAJORITY of the attempted panel:
+//
+//   panelSize 1 -> 1   a deliberately-configured solo panel is a FULL panel and
+//                      keeps deriving its verdict; quorum is about UNEXPECTED
+//                      attrition, not panel size.
+//   panelSize 2 -> 2   a lone survivor of a pair is below quorum. That case also
+//                      silently drops `crossModel` to false — the module already
+//                      treats a single-provider result as degraded.
+//   panelSize 3 -> 2   2-of-3 is a real panel; its verdict is unchanged.
+//   panelSize 20 -> 11
+//
+// Majority rather than "at least half" because it closes
+// `panelistsFailed === panelSize - 1` uniformly for every panelSize >= 2, which
+// is the reported condition. Configurable per-rubric via `quorum` (0 disables
+// the floor; 1 demands the whole panel) through normalizeRubric, alongside
+// cut_threshold. Note that `quorum: 0` cannot reopen panelist#80: the
+// whole-panel branch pins FALLBACK_VERDICT before the quorum check runs.
+const DEFAULT_QUORUM = 0.5;
+const BELOW_QUORUM_NOTE =
+  "panel below quorum — too few panelists reported to trust a derived verdict; REQUIRES HUMAN REVIEW, never auto-publish";
+
+/**
+ * How many panelists must report for a derived verdict to be trusted.
+ * Strictly more than `quorum` of the panel, clamped to the panel size so
+ * `quorum: 1` stays satisfiable, and floored at 1 so an empty requirement is
+ * never produced for a non-empty panel.
+ * @param {number} panelSize
+ * @param {number} quorum  fraction in [0, 1]
+ * @returns {number}
+ */
+export function quorumRequired(panelSize, quorum) {
+  const n = Number.isFinite(panelSize) && panelSize > 0 ? Math.floor(panelSize) : 0;
+  if (n === 0) return 0;
+  const q = Number.isFinite(quorum) && quorum >= 0 && quorum <= 1 ? quorum : DEFAULT_QUORUM;
+  return Math.min(n, Math.max(1, Math.floor(n * q) + 1));
+}
+
 /**
  * A tiny promise-concurrency limiter. Returns `run(fn)` that defers `fn` until
  * fewer than `max` tasks are in flight. Bounds the persona x panelist fan-out.
@@ -118,7 +165,12 @@ export function normalizeRubric(rubric = {}) {
   const killAxes = Array.isArray(r.killAxes) ? r.killAxes : [];
   const killFloor = Number.isFinite(r.killFloor) ? r.killFloor : DEFAULT_KILL_FLOOR;
   const cut_threshold = Number.isFinite(r.cut_threshold) ? r.cut_threshold : DEFAULT_CUT_THRESHOLD;
-  return { axes, killAxes, killFloor, cut_threshold, axisDescriptions };
+  // quorum (panelist#167): fraction of the panel that must report before a
+  // derived verdict is trusted. Out-of-range or non-finite values fall back to
+  // the default rather than throwing, consistent with every other field here.
+  const quorum =
+    Number.isFinite(r.quorum) && r.quorum >= 0 && r.quorum <= 1 ? r.quorum : DEFAULT_QUORUM;
+  return { axes, killAxes, killFloor, cut_threshold, quorum, axisDescriptions };
 }
 
 // ── Default prompt construction (overridable via deps.buildPrompt) ────────────
@@ -443,11 +495,31 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   const byModel = {};
   for (const [model, overalls] of modelRows) byModel[model] = round2(mean(overalls));
 
+  // QUORUM FLOOR (panelist#167). Below quorum the verdict is PINNED to
+  // FALLBACK_VERDICT rather than derived from whoever survived — the same
+  // fail-closed posture panelist#80 gave a totally dead panel, now covering
+  // partial attrition too. The survivors' scores and aggregate are still
+  // reported for human context; only the machine-readable verdict is pinned.
+  // decideVerdict itself is untouched, so panels that DO meet quorum behave
+  // exactly as before.
+  const required = quorumRequired(tasks.length, norm.quorum);
+  const quorumMet = byPersona.length >= required;
+
   return {
     candidate: cand,
     scores: { byPersona, byModel },
     aggregate,
-    verdict: decideVerdict(aggregate, norm),
+    verdict: quorumMet ? decideVerdict(aggregate, norm) : FALLBACK_VERDICT,
+    // quorum: the panel-attrition envelope behind the verdict above. `met:false`
+    // means the verdict was pinned closed, not derived.
+    quorum: {
+      required,
+      reported: byPersona.length,
+      panelSize: tasks.length,
+      fraction: norm.quorum,
+      met: quorumMet,
+      ...(quorumMet ? {} : { note: BELOW_QUORUM_NOTE }),
+    },
     crossModel: spansMultipleProviders(Object.keys(byModel)),
     panelistsFailed,
     // panelSize (panelist#85, PAN-16): total persona x panelist tasks attempted
@@ -542,6 +614,21 @@ function neutralFallback(candidate, panelistsFailed, rubric, shape = {}) {
     panelSize: Number.isFinite(shape.panelSize) ? shape.panelSize : panelistsFailed,
     panelistsReported: 0,
     failuresByCause: shape.failuresByCause || { transport: panelistsFailed, unparsable: 0 },
+    // Same quorum envelope shape as the live-panel result (panelist#167). On
+    // this path nobody reported, so quorum is never met by definition — the
+    // verdict above is pinned for the panelist#80 reason, not this one, but the
+    // field is present so a consumer can read it unconditionally.
+    quorum: (() => {
+      const size = Number.isFinite(shape.panelSize) ? shape.panelSize : panelistsFailed;
+      return {
+        required: quorumRequired(size, norm.quorum),
+        reported: 0,
+        panelSize: size,
+        fraction: norm.quorum,
+        met: false,
+        note: BELOW_QUORUM_NOTE,
+      };
+    })(),
     fallback: true,
     honesty: USAGE_HEADER,
     isolation: buildIsolationEnvelope([], []),
