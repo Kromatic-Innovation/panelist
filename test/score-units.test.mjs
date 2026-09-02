@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   createLimiter,
   normalizeRubric,
+  quorumRequired,
   renderPersona,
   buildEvalPrompt,
   extractJsonObject,
@@ -144,7 +145,34 @@ test("normalizeRubric fills defaults for an empty rubric", () => {
   assert.deepEqual(r.killAxes, []);
   assert.equal(r.killFloor, 4.0);
   assert.equal(r.cut_threshold, 5.0);
+  assert.equal(r.quorum, 0.5);
   assert.equal(r.axisDescriptions, null);
+});
+
+test("normalizeRubric accepts an in-range quorum and rejects nonsense (panelist#167)", () => {
+  assert.equal(normalizeRubric({ quorum: 0 }).quorum, 0);
+  assert.equal(normalizeRubric({ quorum: 1 }).quorum, 1);
+  assert.equal(normalizeRubric({ quorum: 0.75 }).quorum, 0.75);
+  // Out of range / non-numeric falls back to the default rather than throwing.
+  assert.equal(normalizeRubric({ quorum: -1 }).quorum, 0.5);
+  assert.equal(normalizeRubric({ quorum: 2 }).quorum, 0.5);
+  assert.equal(normalizeRubric({ quorum: "most" }).quorum, 0.5);
+});
+
+test("quorumRequired demands a strict majority by default (panelist#167)", () => {
+  // A deliberately-configured solo panel is a FULL panel, not an attrited one.
+  assert.equal(quorumRequired(1, 0.5), 1);
+  assert.equal(quorumRequired(2, 0.5), 2);
+  assert.equal(quorumRequired(3, 0.5), 2);
+  assert.equal(quorumRequired(4, 0.5), 3);
+  assert.equal(quorumRequired(20, 0.5), 11);
+  // quorum 0 disables the floor; quorum 1 demands the whole panel and stays
+  // satisfiable (clamped to panelSize rather than panelSize + 1).
+  assert.equal(quorumRequired(20, 0), 1);
+  assert.equal(quorumRequired(3, 1), 3);
+  // Degenerate panel sizes never produce a negative or fractional requirement.
+  assert.equal(quorumRequired(0, 0.5), 0);
+  assert.equal(quorumRequired(-3, 0.5), 0);
 });
 
 test("normalizeRubric derives axes from an object-of-descriptions", () => {
