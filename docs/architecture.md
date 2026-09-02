@@ -74,7 +74,7 @@ No module imports upward. **There is no filesystem, network, or database access 
 | `schema` | Defines and validates the v2 behavioural persona record; sole source of truth for required/forbidden fields and `USAGE_HEADER`. |
 | `register` | Composes persona/rubric sources into a process-global registry, last-wins by id, failing fast on a malformed record. |
 | `isolation` | Resolves a requested tool allowlist into an effective deny-by-default set, and returns a gate that decides and records denials. |
-| `score` | Runs the persona x panelist matrix against a rubric; returns an aggregated keep/cut verdict with a cross-model flag. |
+| `score` | Runs the persona x panelist matrix against a rubric; returns a keep/cut verdict — aggregated from the panel when enough of it reports, pinned closed when not — with a cross-model flag. |
 | `spawn` | Invokes one registered persona for one model turn; returns the fixed invocation-contract wrapper. |
 | `runner` | Resolves a persona by id and delegates to `spawn`. Holds no logic of its own. |
 | `junction` | Walks a persona through a decision graph one junction at a time behind a structural information barrier, until bail / terminal / budget-exhausted / invalid-decision. |
@@ -113,8 +113,8 @@ The loop only ever touches the junction it is standing on, and resolves that jun
 |---|---|---|
 | `register` | **Throws** on a malformed record | A runtime compose call has a caller to hand the error to; degrading to empty would hide the bug |
 | `drift-check` | **Never throws**; reports instead | A validator that dies on the first bad record can't report the rest |
-| `spawn` / `junction` | **Throw** on an unusable client response | One persona failing has no quorum to fall back on |
-| `score` | **Counts** failures in `panelistsFailed` and continues | A panel is a quorum; one dead panelist shouldn't kill the run |
+| `spawn` / `junction` | **Throw** on an unusable client response | One persona failing has no panel to fall back on |
+| `score` | **Counts** failures in `panelistsFailed` and continues | Attrition is data, not a crash; the survivors are still reported, and the verdict pins closed when too few of them are |
 
 All four are correct. Don't unify them.
 
