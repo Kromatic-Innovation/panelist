@@ -105,6 +105,21 @@ registry and no second publish workflow. To cut a release:
    `.github/workflows/promote-main.yml`), so the release commit is on `main`.
 5. Tag that commit `vX.Y.Z` **on `main`** and push the tag. Pushing a `v*` tag
    triggers `release.yml`, which publishes to public npm.
+6. **After `release.yml` has finished publishing**, cut a GitHub Release for
+   that same tag:
+
+   ```bash
+   gh release create vX.Y.Z --verify-tag \
+     --title vX.Y.Z --notes-file <notes.md> --latest
+   ```
+
+   Take the notes from that version's own `CHANGELOG.md` section — the
+   changelog is the authoritative record, so the Release should reproduce it
+   rather than restate it. `--verify-tag` makes the command fail if the tag
+   does not already exist, so a Release can only ever point at the tag step 5
+   pushed; it never creates or moves one. Mark the newest version `--latest`;
+   pass `--latest=false` when adding a Release for an older version after the
+   fact.
 
 **The tag must be on `main`.** `release.yml` fires from a `v*` tag pushed from
 any ref, so it defends itself: it hard-fails the job if the tagged commit is
@@ -112,9 +127,17 @@ not an ancestor of `origin/main` (`git merge-base --is-ancestor "$GITHUB_SHA"
 origin/main`). Tag before promoting and the publish is rejected, not silently
 released from unmerged code.
 
-Cutting a GitHub Release for the tag afterwards is still a good practice for
-publishing release notes — but it is **not** a publish trigger. Nothing runs on
-`release: published` any more; the pushed tag is what publishes.
+**Step 6 is a release-notes / public-record step, performed after the publish —
+it is *not* a publish trigger.** Nothing runs on `release: published` any more;
+the pushed tag is what publishes. The Release exists so the GitHub side of the
+record (notes, an audit trail, a subscribe/notify surface) lines up with npm's
+version history for anyone checking provenance. Cutting it earlier would
+publish nothing; skipping it publishes just the same, and only leaves the
+public record thinner.
+
+Releases for the tags that predate this step (`v0.2.0`, `v0.2.1`, `v0.3.0`,
+`v0.4.0`) were backfilled this way in panelist#163, so the Releases page is
+complete rather than prospective.
 
 **Pre-1.0 (0.x) semver rule:** while panelist is `0.x`, MINOR bumps (`0.x.0`)
 may include breaking changes and PATCH bumps (`0.0.x`) are for fixes only —
