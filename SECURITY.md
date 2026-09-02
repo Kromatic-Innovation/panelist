@@ -33,3 +33,15 @@ prefer to stay anonymous.
 panelist has zero runtime dependencies, which narrows but does not eliminate
 its attack surface (e.g. supply-chain risk in dev/build tooling, or misuse
 of the API surface itself). We don't currently run a bug-bounty program.
+
+The release pipeline is explicitly in scope for reports. The unscoped
+`panelist` package is published to the public npm registry by
+`.github/workflows/release.yml`, which is triggered by pushing a `v*` tag and
+authenticates via npm Trusted Publishing (OIDC) — no long-lived npm token is
+stored in this repository or its organization. Before publishing, that
+workflow asserts that the tag name matches the `version` in `package.json`
+and that the tagged commit is an ancestor of `origin/main`, so a tag on
+unmerged code is rejected rather than released. Weaknesses in that pipeline —
+ways to publish a `panelist` release without those assertions holding, or to
+obtain the publishing identity — are security issues and should be reported
+by the same private process above.
