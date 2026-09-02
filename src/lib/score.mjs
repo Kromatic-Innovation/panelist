@@ -617,7 +617,9 @@ function neutralFallback(candidate, panelistsFailed, rubric, shape = {}) {
     // Same quorum envelope shape as the live-panel result (panelist#167). On
     // this path nobody reported, so quorum is never met by definition — the
     // verdict above is pinned for the panelist#80 reason, not this one, but the
-    // field is present so a consumer can read it unconditionally.
+    // field is present so both BUILT-IN paths carry it. A custom deps.fallback
+    // replaces this function wholesale and is under no obligation to emit it,
+    // so a consumer reading `quorum` off an arbitrary result should still guard.
     quorum: (() => {
       const size = Number.isFinite(shape.panelSize) ? shape.panelSize : panelistsFailed;
       return {
