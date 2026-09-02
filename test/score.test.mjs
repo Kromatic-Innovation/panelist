@@ -412,8 +412,9 @@ test("through rankCandidatesWith, the pinned candidate lands in cut (not neither
 // ── panelist#179: the degraded-panel invariant, independent of which path
 // produced the degradation ───────────────────────────────────────────────────
 //
-// #80 (total outage), #167 (partial attrition), and #176 (the deps.fallback
-// channel) were the same defect in one function, found three times: nothing
+// panelist#80 (total outage), panelist#167 (partial attrition), and
+// panelist#176 (the deps.fallback channel) were the same defect in one
+// function, found three times: nothing
 // asserted "a degraded panel never yields keep" independent of which path
 // produced the degradation — every prior assertion was a point test against
 // one path. This table walks personas 1..4 x panelists 1..4 x panelist
@@ -479,7 +480,7 @@ for (const personaCount of MATRIX_PERSONA_COUNTS) {
 // Total-outage path, explicitly, WITH a custom deps.fallback that attempts
 // "keep" — the same table shape as above, but proving the fallback channel
 // pin (panelist#176) can't be bypassed by any personas x panelists shape,
-// not just the shape #176's own regression test used.
+// not just the shape panelist#176's own regression test used.
 for (const personaCount of MATRIX_PERSONA_COUNTS) {
   test(`degraded-panel invariant: total outage, ${personaCount} persona(s), custom fallback attempts "keep" (panelist#179)`, async () => {
     const personas = reviewPack.slice(0, personaCount);
