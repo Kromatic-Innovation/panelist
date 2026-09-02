@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { score, scoreCandidate, decideVerdict } from "../src/lib/score.mjs";
+import { score, scoreCandidate, decideVerdict, rankCandidatesWith } from "../src/lib/score.mjs";
 import { HONESTY_MARKER } from "../src/lib/honesty.mjs";
 import { fixedScorer, deadClient, toolAttemptingScorer, capturingScorer } from "./_helpers.mjs";
 import reviewPack from "../packs/review/index.mjs";
@@ -332,4 +332,79 @@ test("quorum: 0 cannot reopen the whole-panel fail-open (panelist#80 stays close
   const res = await score(cand, reviewPack.slice(0, 1), { ...RUBRIC, quorum: 0, cut_threshold: 0 }, { panel });
   assert.equal(res.fallback, true);
   assert.equal(res.verdict, "cut");
+});
+
+// ── panelist#176: pin the deps.fallback verdict channel ─────────────────────
+
+test("a custom deps.fallback returning verdict:'keep' on a dead panel is pinned to 'cut' (panelist#176)", async () => {
+  const panel = [deadClient("claude-x"), deadClient("gpt-y")];
+  const customFallback = (candidate) => ({
+    candidate,
+    scores: { byPersona: [], byModel: {} },
+    aggregate: { overall: 9 },
+    verdict: "keep",
+    fallback: true,
+  });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  assert.equal(res.verdict, "cut");
+});
+
+test("a custom deps.fallback omitting verdict entirely is pinned to 'cut' (panelist#176)", async () => {
+  const panel = [deadClient("claude-x"), deadClient("gpt-y")];
+  const customFallback = (candidate) => ({
+    candidate,
+    scores: { byPersona: [], byModel: {} },
+    aggregate: { overall: 0 },
+    fallback: true,
+  });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  assert.equal(res.verdict, "cut");
+});
+
+test("a custom deps.fallback returning an off-vocabulary verdict is pinned to 'cut' (panelist#176)", async () => {
+  const panel = [deadClient("claude-x"), deadClient("gpt-y")];
+  const customFallback = (candidate) => ({
+    candidate,
+    scores: { byPersona: [], byModel: {} },
+    aggregate: { overall: 0 },
+    verdict: "maybe",
+    fallback: true,
+  });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  assert.equal(res.verdict, "cut");
+});
+
+test("the pin touches verdict only — every other custom-fallback field survives untouched (panelist#176 AC2)", async () => {
+  const panel = [deadClient("claude-x"), deadClient("gpt-y")];
+  const customFallback = (candidate, panelistsFailed) => ({
+    candidate,
+    scores: { byPersona: [], byModel: {} },
+    aggregate: { overall: 0 },
+    verdict: "keep",
+    note: "custom note",
+    fallback: true,
+    custom: true,
+    panelistsFailed,
+  });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  assert.equal(res.verdict, "cut");
+  assert.equal(res.note, "custom note");
+  assert.equal(res.custom, true);
+  assert.equal(res.fallback, true);
+  assert.deepEqual(res.scores, { byPersona: [], byModel: {} });
+});
+
+test("through rankCandidatesWith, the pinned candidate lands in cut (not neither list) and a fallback omitting aggregate does not throw (panelist#176 AC3)", async () => {
+  const panel = [deadClient("claude-x"), deadClient("gpt-y")];
+  const customFallback = (candidate) => ({
+    candidate,
+    scores: { byPersona: [], byModel: {} },
+    // Deliberately no `aggregate` and no `verdict` — the vanishing/crashing
+    // shape this issue closes.
+  });
+  const result = await rankCandidatesWith([cand], reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  assert.equal(result.shortlist.length, 0);
+  assert.equal(result.cut.length, 1);
+  assert.equal(result.cut[0].evaluation.verdict, "cut");
+  assert.equal(result.cut[0].evaluation.aggregate.overall, 0);
 });
