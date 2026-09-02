@@ -100,6 +100,12 @@ registry and no second publish workflow. To cut a release:
    to the same value — they must stay in sync.
 2. Add a `CHANGELOG.md` entry for the new version under
    `## [X.Y.Z] - YYYY-MM-DD`, moving relevant `[Unreleased]` notes into it.
+   Open the entry with a short **Highlights** list — 3-5 bullets naming the
+   release's main storylines, written for someone deciding whether to upgrade —
+   before the detailed `### Added` / `### Changed` / `### Fixed` / `### Docs`
+   sections, so the shape of the release is legible without reading every
+   bullet. Any release-wide behavior warning goes above the Highlights, in a
+   banner directly under the version heading.
 3. Commit the bump on `develop` and merge it via PR as usual.
 4. Promote `develop` → `main` (the `Promote Main` workflow,
    `.github/workflows/promote-main.yml`), so the release commit is on `main`.

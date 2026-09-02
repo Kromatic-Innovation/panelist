@@ -13,6 +13,189 @@ takes over.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-02
+
+**This patch moves an observable verdict.** A panel that runs but comes back
+below quorum now returns `verdict: "cut"` where it previously derived a verdict
+from whichever panelists survived — and a lone survivor returning neutral
+scores derived `"keep"` (see **Changed**). Panels that meet quorum are
+unaffected.
+
+### Highlights
+
+- **A partly-failed panel no longer returns a passing verdict.** `0.4.0` closed
+  this for a *totally* dead panel, but one panelist short of that the verdict
+  was still derived from the survivors — so a 19-of-20 provider outage could
+  still hand a programmatic gate a `"keep"`. Scoring now fails closed unless a
+  strict majority of the attempted panel reports.
+- **New `rubric.quorum` (default `0.5`) tunes or disables that floor,** and a
+  new `quorum` envelope on every result reports how much of the panel actually
+  came back and whether the verdict was derived or pinned.
+- **If you gate on `verdict`, re-check your degraded-panel path before
+  upgrading.** This is the only behavior change in the release; healthy panels
+  score exactly as they did in `0.4.0`.
+- **Governance and provenance documentation caught up with reality:** an
+  accountable maintainer and the project's actual run-model are stated in
+  `CONTRIBUTING.md`, the release pipeline is named in-scope security surface,
+  and GitHub Releases now exist for every published version.
+
+### Added
+
+- **`CONTRIBUTING.md` names an accountable maintainer, and says plainly how
+  this project is actually run
+  ([#161](https://github.com/Kromatic-Innovation/panelist/issues/161)).** A new
+  "Who maintains panelist" section names Kromatic (the `Kromatic-Innovation`
+  GitHub organization) as the accountable party and collects the contact paths
+  that already existed — `security@kromatic.com` for vulnerabilities, the issue
+  tracker for everything else. It also states what a prospective dependant
+  needs in order to judge the project for themselves: most commits here are
+  authored by automation running under Kromatic's direction, there is no
+  dedicated review team, and **no response-time commitment is offered on pull
+  requests or feature requests** (the response times in `SECURITY.md` cover
+  security reports only). Accountability sits with the organization rather than
+  a single named individual by design — an organizational mailbox and
+  org-owner admin do not depend on one person staying reachable — and if
+  Kromatic ever stops maintaining panelist, Apache-2.0 plus fully public
+  history means forking is available without asking. No new contact address and
+  no named individual were added.
+
+- **The new-issue chooser now surfaces the private security-reporting path
+  ([#164](https://github.com/Kromatic-Innovation/panelist/issues/164)).**
+  `.github/ISSUE_TEMPLATE/config.yml` gained a `contact_links` entry pointing
+  at the repository's security policy, so someone about to file a vulnerability
+  as a public issue sees the private route before they do, rather than only
+  finding it if they open `SECURITY.md` first. Blank issues remain enabled.
+
+### Changed
+
+- **A panel below quorum no longer derives its verdict from the survivors
+  ([#167](https://github.com/Kromatic-Innovation/panelist/issues/167)).**
+  [#80](https://github.com/Kromatic-Innovation/panelist/issues/80), shipped in
+  `0.4.0`, pinned the verdict to `"cut"` when *every* panelist failed — but it
+  pinned the endpoint and left the slope. One panelist short of a total outage,
+  the verdict was still *derived* from whoever came back, and a lone survivor
+  returning a neutral `5` on every axis aggregates to `overall: 5.0` against the
+  default `cut_threshold` of `5.0`, which `decideVerdict`'s strict
+  `overall < cut_threshold` reads as `"keep"`. A 19-of-20 provider outage
+  therefore returned a **passing** verdict to a programmatic gate: the exact
+  consumer hazard [#80](https://github.com/Kromatic-Innovation/panelist/issues/80)
+  was meant to close, surviving in the partial-attrition case.
+
+  `scoreCandidate` now trusts a derived verdict only when a quorum of the
+  attempted panel reported. The new `rubric.quorum` is a fraction, default
+  `0.5`, applied as a **strict** majority —
+  `required = min(panelSize, floor(panelSize × quorum) + 1)`. That closes
+  `panelistsFailed === panelSize - 1` uniformly for every `panelSize >= 2`,
+  while a deliberately-configured solo panel (`panelSize` 1) still derives its
+  verdict as before: quorum is about *unexpected attrition*, not panel size.
+  Below quorum the verdict is pinned to `"cut"`. The survivors' per-persona
+  scores and the aggregate are still reported in full for human context —
+  nothing is hidden, only the machine-readable verdict fails closed.
+
+  **This changes an observable verdict on the attrition path.** A candidate
+  whose panel came back below quorum and previously scored `"keep"` now scores
+  `"cut"`; because `rankCandidatesWith` splits its result on exactly that
+  field, such a candidate now lands in `cut` rather than `shortlist`. If you
+  gate on `verdict`, re-check your degraded-panel path before upgrading.
+  **Panels that meet quorum are entirely unaffected,** and `decideVerdict`'s own
+  semantics are untouched — no healthy-panel verdict moves.
+
+  Both built-in result paths (the live panel and the neutral fallback) now
+  carry a `quorum` envelope —
+  `{ required, reported, panelSize, fraction, met }`, plus a
+  "REQUIRES HUMAN REVIEW" `note` when `met` is `false` — so a caller can tell a
+  pinned verdict from a derived one without re-deriving the arithmetic. A
+  custom `deps.fallback` replaces the built-in fallback wholesale and is under
+  no obligation to emit the envelope, so guard when reading `quorum` off an
+  arbitrary result. `quorum: 0` opts out of the floor entirely but **cannot**
+  reopen [#80](https://github.com/Kromatic-Innovation/panelist/issues/80): the
+  total-failure branch pins its verdict before the quorum check runs.
+  `quorum: 1` demands the whole panel.
+
+- **`SECURITY.md` declares the release pipeline in-scope supply-chain surface
+  ([#162](https://github.com/Kromatic-Innovation/panelist/issues/162)).** The
+  policy previously scoped itself to the library's own code, noting only that
+  zero runtime dependencies narrow the attack surface. It now says explicitly
+  that the way `panelist` reaches npm is itself reportable:
+  `.github/workflows/release.yml` publishes the unscoped `panelist` package to
+  the public registry on a pushed `v*` tag, authenticating via npm Trusted
+  Publishing (OIDC), with **no long-lived npm token** stored in this repository
+  or its organization; before publishing, it asserts that the tag name matches
+  `package.json`'s `version` and that the tagged commit is an ancestor of
+  `origin/main`, so a tag on unmerged code is rejected rather than released.
+  Any way to publish a `panelist` release without those assertions holding, or
+  to obtain the publishing identity, is a security issue under the same private
+  process. Each claim was verified against the workflow. This documents the
+  existing pipeline — nothing about the pipeline itself changed.
+
+### Docs
+
+- **GitHub Releases backfilled for every published version, and cutting one is
+  now step 6 of the release flow — including what going back to do it cost
+  ([#163](https://github.com/Kromatic-Innovation/panelist/issues/163)).**
+  panelist had published annotated tags but no GitHub Releases, so the public
+  GitHub record did not line up with npm's version history for anyone checking
+  provenance. Releases now exist for `v0.2.0`, `v0.2.1`, `v0.3.0` and `v0.4.0`,
+  with notes reproduced from each version's own `CHANGELOG.md` section and
+  `v0.4.0` marked latest. **No tag was created, moved, or re-pointed** —
+  `--verify-tag` is documented so the command fails rather than inventing one.
+  `CONTRIBUTING.md` gains the step, carefully scoped: in the current flow the
+  Release is a release-notes and public-record step performed *after*
+  `release.yml` has published, and is **not** a publish trigger — the pushed
+  tag is what publishes.
+
+  **What the backfill set off, plainly.** The safety check run beforehand
+  grepped the *working tree* for a `release:` workflow trigger and found none.
+  That check was the wrong one. GitHub resolves a `release`-triggered workflow
+  from the **release's own tag ref**, not from the default branch, so deleting
+  such a workflow on `develop` does not disarm it for tags that predate the
+  deletion. `publish.yml` — removed on `develop` in
+  [#123](https://github.com/Kromatic-Innovation/panelist/issues/123) — is still
+  present in the trees at `v0.2.0`, `v0.2.1` and `v0.3.0`. Cutting those three
+  Releases ran it and republished `@kromatic-innovation/panelist` 0.2.0, 0.2.1
+  and 0.3.0 to GitHub Packages: the very publish path
+  [#123](https://github.com/Kromatic-Innovation/panelist/issues/123) had
+  retired. `v0.4.0`'s tree contains no `publish.yml` and fired nothing.
+  **The public npm package (unscoped `panelist`) is unaffected** — nothing was
+  published to, unpublished from, or otherwise altered on the public registry.
+
+  **Operator decision, 2026-09-02: those three GitHub Packages versions are
+  being left in place, not deleted.** They were built from the tags they are
+  named for, and
+  [#123](https://github.com/Kromatic-Innovation/panelist/issues/123)'s
+  retirement was always about stopping *future* publishes rather than
+  withdrawing what had already been published there — as the `[0.4.0]` entry
+  for that issue states. This is a settled decision, not an open loose end.
+
+  The correct precondition is a **per-tag** check rather than a working-tree
+  grep — `gh api /repos/Kromatic-Innovation/panelist/contents/.github/workflows?ref=vX.Y.Z`
+  before backfilling a Release for any older tag. That check is now written
+  into `CONTRIBUTING.md`'s step 6, and the "not a publish trigger" paragraph is
+  scoped to the current flow instead of standing as a general claim that a
+  Release can never run anything.
+
+- **`docs/architecture.md` was added during the `0.4.0` window without a
+  changelog bullet; recording it here
+  ([#97](https://github.com/Kromatic-Innovation/panelist/issues/97), commit
+  `52b82d1`, gap found in
+  [#165](https://github.com/Kromatic-Innovation/panelist/issues/165)).** It is
+  a durable architecture map — the three invocation planes, module boundaries,
+  the dependency graph, and the design invariants that explain why the code
+  looks the way it does. It deliberately carries no line numbers, metrics, or
+  findings, so it needs updating only when a module is added, removed or
+  re-layered, or when one of its invariants stops being true. The published
+  `[0.4.0]` section is tagged and immutable, so the missing bullet is recorded
+  in this entry rather than retrofitted there.
+
+- **CHANGELOG entries now open with a Highlights list
+  ([#166](https://github.com/Kromatic-Innovation/panelist/issues/166)).** A
+  release-candidate review panel scored `[0.4.0]` as hard to take the shape of
+  without reading all twelve issues' worth of bullets. Going forward each
+  version entry opens with 3-5 Highlights written for someone deciding whether
+  to upgrade, before the detailed subsections; the convention is documented in
+  `CONTRIBUTING.md`'s release steps. This entry is the first to follow it. The
+  published `[0.4.0]` entry is not retrofitted.
+
 ## [0.4.0] - 2026-09-01
 
 **Minor under pre-1.0 semantics** — a total panel failure now returns
