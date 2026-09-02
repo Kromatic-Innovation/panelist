@@ -40,6 +40,12 @@ panelist is published to the public npm registry as the unscoped package
 Innovation; published to npm from the `trikro` account. No `.npmrc` changes
 required.
 
+If you land on a `@kromatic-innovation/panelist` package on **GitHub
+Packages**, that is a retired second publish path — the same project, no longer
+updated, and not a fork, a private build, or a different edition. Install the
+unscoped `panelist` from npmjs.org; it is the canonical package and the only one
+that still receives releases.
+
 > **Bring your own model client — required.** panelist bundles **no** live
 > model. You inject a provider adapter as `spawn`'s third argument
 > (`deps.client`); the **default client throws** rather than run without one, so
