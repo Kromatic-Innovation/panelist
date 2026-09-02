@@ -162,11 +162,27 @@ contract** described here:
 | **Agentic**      | `spawn.mjs` (`spawn`)                    | One persona, one turn, one wrapper                                                                                      | Ad hoc single-persona invocation at a call site — "would _this_ persona stop reading here?"             |
 
 `score.mjs` is rubric-shaped: it takes a `rubric` (axes, kill axes, kill
-floor, cut threshold), runs the full persona × panelist matrix through
+floor, cut threshold, quorum), runs the full persona × panelist matrix through
 `createLimiter`-bounded concurrency, and returns
-`{ scores, aggregate, verdict, crossModel, panelistsFailed }` — built for
-volume and the cross-model anti-sycophancy guarantee
+
+```
+{ candidate, scores, aggregate, verdict, quorum, crossModel,
+  panelistsFailed, panelSize, panelistsReported, failuresByCause,
+  honesty, isolation }
+```
+
+— built for volume and the cross-model anti-sycophancy guarantee
 (`crossModel: spansMultipleProviders(...)`), not for talking to one persona.
+
+`quorum` is the panel-attrition envelope behind `verdict`:
+`{ required, reported, panelSize, fraction, met }`, plus a `note` **only**
+when `met` is `false`. When fewer than `required` panelists report, `verdict`
+is *pinned* to `"cut"` rather than derived from the survivors — the survivors'
+scores and `aggregate` are still reported for human context, and only the
+machine-readable verdict fails closed. The built-in total-panel-failure
+fallback returns the same keys plus `fallback: true`; a caller who replaces it
+via `deps.fallback` is under no obligation to emit any of them, so guard when
+reading these off an arbitrary result.
 
 `spawn.mjs` is call-shaped: one `personaId`, one `{ mode, artifact, ... }`,
 one wrapper. Today that's a single model call; it's the foundation the

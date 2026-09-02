@@ -196,6 +196,22 @@ unaffected.
   `CONTRIBUTING.md`'s release steps. This entry is the first to follow it. The
   published `[0.4.0]` entry is not retrofitted.
 
+- **`docs/` caught up with the quorum floor
+  ([#172](https://github.com/Kromatic-Innovation/panelist/issues/172)).**
+  `docs/invocation-contract.md` documented `score()`'s return as five keys and
+  its rubric input as four; both lists read as exhaustive and both were stale —
+  the return omitted `quorum` along with `candidate`, `panelSize`,
+  `panelistsReported`, `failuresByCause`, `honesty` and `isolation`, and the
+  rubric omitted `quorum`. Both now match `src/lib/score.mjs`, with the
+  attrition envelope, the conditional `note`, and the fallback path's extra
+  `fallback: true` spelled out. `docs/architecture.md`'s fail-behavior table
+  asserted the inverse of shipped behavior — "one dead panelist shouldn't kill
+  the run" is false at `panelSize` 2, where one dead panelist is below quorum
+  and the verdict pins to `"cut"` — and used "quorum" in a sense contradicting
+  `rubric.quorum`; the rationale is corrected and the neighbouring `spawn` /
+  `junction` row's colliding use of the same word is swapped for "panel". No
+  code changed: the code was right and the docs described it wrongly.
+
 ## [0.4.0] - 2026-09-01
 
 **Minor under pre-1.0 semantics** — a total panel failure now returns
