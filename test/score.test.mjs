@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { score, scoreCandidate, decideVerdict, rankCandidatesWith } from "../src/lib/score.mjs";
 import { HONESTY_MARKER } from "../src/lib/honesty.mjs";
-import { fixedScorer, deadClient, toolAttemptingScorer, capturingScorer } from "./_helpers.mjs";
+import { fixedScorer, deadClient, toolAttemptingScorer, capturingScorer, variableScorer } from "./_helpers.mjs";
 import reviewPack from "../packs/review/index.mjs";
 
 const RUBRIC = {
@@ -407,4 +407,146 @@ test("through rankCandidatesWith, the pinned candidate lands in cut (not neither
   assert.equal(result.cut.length, 1);
   assert.equal(result.cut[0].evaluation.verdict, "cut");
   assert.equal(result.cut[0].evaluation.aggregate.overall, 0);
+});
+
+// ── panelist#179: the degraded-panel invariant, independent of which path
+// produced the degradation ───────────────────────────────────────────────────
+//
+// panelist#80 (total outage), panelist#167 (partial attrition), and
+// panelist#176 (the deps.fallback channel) were the same defect in one
+// function, found three times: nothing
+// asserted "a degraded panel never yields keep" independent of which path
+// produced the degradation — every prior assertion was a point test against
+// one path. This table walks personas 1..4 x panelists 1..4 x panelist
+// failures 0..panelists (a dead panelist costs every persona's task against
+// it, matching the real "a provider dies" shape) and asserts the invariant
+// through score()'s PUBLIC output only (quorum.required, quorum.met,
+// panelistsReported, verdict, aggregate) — never by re-deriving the
+// quorumRequired arithmetic — so it survives a future refactor of that
+// function (issue AC5).
+
+test("panelist#179 AC2: 4 personas x 2 panelists, one provider dying costs 4 tasks and required is 5", async () => {
+  // The concrete shape the issue names. required=5 is a deliberately
+  // hardcoded expectation for this ONE named case (AC2) — the general matrix
+  // below does not recompute this arithmetic.
+  const panel = [fixedScorer("panelist-a", GOOD), deadClient("panelist-b")];
+  const res = await score(cand, reviewPack.slice(0, 4), RUBRIC, { panel });
+  assert.equal(res.panelSize, 8);
+  assert.equal(res.panelistsReported, 4);
+  assert.equal(res.quorum.required, 5);
+  assert.equal(res.quorum.met, false);
+  // Intended fail-closed behavior — what an operator meets first on a bad
+  // provider hour. Asserted as expected, not treated as a finding.
+  assert.equal(res.verdict, "cut");
+});
+
+const MATRIX_PERSONA_COUNTS = [1, 2, 3, 4];
+const MATRIX_PANELIST_COUNTS = [1, 2, 3, 4];
+
+for (const personaCount of MATRIX_PERSONA_COUNTS) {
+  for (const panelistCount of MATRIX_PANELIST_COUNTS) {
+    for (let deadCount = 0; deadCount <= panelistCount; deadCount++) {
+      const label = `${personaCount} persona(s) x ${panelistCount} panelist(s), ${deadCount}/${panelistCount} dead`;
+      test(`degraded-panel invariant: ${label} (panelist#179)`, async () => {
+        const personas = reviewPack.slice(0, personaCount);
+        const panel = [];
+        for (let i = 0; i < panelistCount; i++) {
+          panel.push(i < deadCount ? deadClient(`dead-${i}`) : fixedScorer(`alive-${i}`, GOOD));
+        }
+        const res = await score(cand, personas, RUBRIC, { panel });
+
+        if (res.panelistsReported === 0) {
+          // Total-outage path (panelist#80's pin): zero panelists reporting
+          // must never surface a passing verdict, for any personas x
+          // panelists shape.
+          assert.equal(res.verdict, "cut");
+        } else if (res.panelistsReported < res.quorum.required) {
+          // Partial-attrition path (panelist#167's pin): below the quorum
+          // floor the verdict must never be derived, regardless of shape.
+          assert.notEqual(res.verdict, "keep");
+          assert.equal(res.verdict, "cut");
+        }
+        if (res.quorum.met === true) {
+          // At/above quorum the verdict must still be exactly what
+          // decideVerdict derives from the public aggregate — quorum being
+          // met changes nothing about how the verdict is computed.
+          assert.equal(res.verdict, decideVerdict(res.aggregate, RUBRIC));
+        }
+      });
+    }
+  }
+}
+
+// Total-outage path, explicitly, WITH a custom deps.fallback that attempts
+// "keep" — the same table shape as above, but proving the fallback channel
+// pin (panelist#176) can't be bypassed by any personas x panelists shape,
+// not just the shape panelist#176's own regression test used.
+for (const personaCount of MATRIX_PERSONA_COUNTS) {
+  test(`degraded-panel invariant: total outage, ${personaCount} persona(s), custom fallback attempts "keep" (panelist#179)`, async () => {
+    const personas = reviewPack.slice(0, personaCount);
+    const panel = [deadClient("dead-a"), deadClient("dead-b")];
+    const customFallback = (candidate) => ({
+      candidate,
+      scores: { byPersona: [], byModel: {} },
+      aggregate: { overall: 9 },
+      verdict: "keep",
+      fallback: true,
+    });
+    const res = await score(cand, personas, RUBRIC, { panel, fallback: customFallback });
+    // A custom deps.fallback replaces neutralFallback wholesale and is under
+    // no obligation to emit panelistsReported/quorum (see score.mjs's own
+    // comment on this) — but the pin is unconditional either way.
+    assert.equal(res.verdict, "cut");
+  });
+}
+
+test("rankCandidatesWith: a below-quorum candidate lands in cut (not neither list), other candidates rank normally (panelist#179 AC3)", async () => {
+  const BELOW = { text: "BELOW_QUORUM_MARKER candidate" };
+  const HIGH = { text: "HIGH_MARKER candidate" };
+  const MID = { text: "MID_MARKER candidate" };
+  const HIGH_SCORES = { resonance: 9, clarity: 9, credibility: 9, scrollStop: 9 };
+  const MID_SCORES = { resonance: 6, clarity: 6, credibility: 6, scrollStop: 6 };
+
+  // panelistA reports for every candidate; panelistB fails ONLY for BELOW's
+  // prompts (matched via its marker text) — the same shared deps.panel array
+  // is reused across all three candidates in the rankCandidatesWith call, so
+  // this is what makes BELOW's calls fail while HIGH/MID's succeed on the
+  // identical client objects. 4 personas x 2 panelists = 8 tasks; BELOW gets
+  // only 4 (1 surviving panelist), below quorumRequired(8, 0.5) = 5.
+  const panelistA = variableScorer("panelist-a", (prompt) => {
+    if (prompt.includes("HIGH_MARKER")) return HIGH_SCORES;
+    if (prompt.includes("MID_MARKER")) return MID_SCORES;
+    return GOOD;
+  });
+  const panelistB = variableScorer("panelist-b", (prompt) => {
+    if (prompt.includes("BELOW_QUORUM_MARKER")) return null;
+    if (prompt.includes("HIGH_MARKER")) return HIGH_SCORES;
+    if (prompt.includes("MID_MARKER")) return MID_SCORES;
+    return GOOD;
+  });
+
+  const result = await rankCandidatesWith([BELOW, HIGH, MID], reviewPack.slice(0, 4), RUBRIC, {
+    panel: [panelistA, panelistB],
+  });
+
+  const belowEntry = [...result.shortlist, ...result.cut].find((e) => e.text === BELOW.text);
+  assert.ok(belowEntry, "below-quorum candidate must land in one of the two lists, not vanish");
+  assert.equal(
+    result.cut.some((e) => e.text === BELOW.text),
+    true,
+    "below-quorum candidate must land in cut, not shortlist",
+  );
+  assert.equal(belowEntry.evaluation.panelistsReported, 4);
+  assert.equal(belowEntry.evaluation.quorum.met, false);
+  assert.equal(belowEntry.evaluation.verdict, "cut");
+
+  // The other two candidates both meet quorum and rank normally by score.
+  const highEntry = result.shortlist.find((e) => e.text === HIGH.text);
+  const midEntry = result.shortlist.find((e) => e.text === MID.text);
+  assert.ok(highEntry && midEntry, "full-quorum candidates land in shortlist");
+  assert.equal(highEntry.evaluation.quorum.met, true);
+  assert.equal(midEntry.evaluation.quorum.met, true);
+  assert.equal(highEntry.evaluation.verdict, "keep");
+  assert.equal(midEntry.evaluation.verdict, "keep");
+  assert.ok(highEntry.rank < midEntry.rank, "the higher-scoring candidate ranks first");
 });
