@@ -121,6 +121,17 @@ registry and no second publish workflow. To cut a release:
    pass `--latest=false` when adding a Release for an older version after the
    fact.
 
+   > **Before cutting a Release for an *older* tag, inspect that tag's own
+   > tree.** A `release`-triggered workflow is resolved by GitHub from the
+   > **release's tag ref**, not from the default branch — so deleting such a
+   > workflow on `develop` does *not* disarm it for tags that predate the
+   > deletion. Check with
+   > `gh api /repos/Kromatic-Innovation/panelist/contents/.github/workflows?ref=vX.Y.Z`
+   > before backfilling. This is not hypothetical: the panelist#163 backfill
+   > cut Releases for `v0.2.0`, `v0.2.1` and `v0.3.0`, whose trees still
+   > contain the `publish.yml` deleted in panelist#123, and all three ran it
+   > and published `@kromatic-innovation/panelist` to GitHub Packages.
+
 **The tag must be on `main`.** `release.yml` fires from a `v*` tag pushed from
 any ref, so it defends itself: it hard-fails the job if the tagged commit is
 not an ancestor of `origin/main` (`git merge-base --is-ancestor "$GITHUB_SHA"
@@ -135,9 +146,14 @@ version history for anyone checking provenance. Cutting it earlier would
 publish nothing; skipping it publishes just the same, and only leaves the
 public record thinner.
 
+That claim is about the *current* flow — a tag just pushed from `main`, whose
+tree contains no `release`-triggered workflow. It is **not** a general claim
+that cutting a Release can never run anything: see the caveat under step 6 for
+older tags.
+
 Releases for the tags that predate this step (`v0.2.0`, `v0.2.1`, `v0.3.0`,
-`v0.4.0`) were backfilled this way in panelist#163, so the Releases page is
-complete rather than prospective.
+`v0.4.0`) were backfilled in panelist#163, so the Releases page is complete
+rather than prospective.
 
 **Pre-1.0 (0.x) semver rule:** while panelist is `0.x`, MINOR bumps (`0.x.0`)
 may include breaking changes and PATCH bumps (`0.0.x`) are for fixes only —
