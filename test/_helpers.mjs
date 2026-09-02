@@ -95,3 +95,28 @@ export function capturingScorer(model, scores, captured) {
     },
   };
 }
+
+/**
+ * A scorer panelist (score.mjs shape) whose response depends on the prompt
+ * text via `chooser(prompt)`: returning a scores object emits that score;
+ * returning null/undefined simulates a failed call (ok:false). Lets a test
+ * make ONE panelist client behave differently per CANDIDATE — matched via a
+ * marker string embedded in candidate.text, which buildEvalPrompt threads
+ * into the prompt — even though rankCandidatesWith reuses the same shared
+ * deps.panel array across every candidate in the list. Used to put a single
+ * candidate below quorum (some panelists fail only for its marker) while
+ * other candidates sharing the same panel report normally, each with its own
+ * distinct scores (panelist#179).
+ * @param {string} model
+ * @param {(prompt: string) => (object|null|undefined)} chooser
+ */
+export function variableScorer(model, chooser) {
+  return {
+    model,
+    async complete({ prompt }) {
+      const scores = chooser(prompt);
+      if (!scores) return { ok: false, reason: "simulated failure" };
+      return { ok: true, text: JSON.stringify({ ...scores, note: "mock" }), model };
+    },
+  };
+}
