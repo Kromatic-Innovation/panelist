@@ -159,7 +159,8 @@ contract** described here:
 | Plane            | Entry point                              | Shape                                                                                                                   | Use for                                                                                                 |
 | ---------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | **Programmatic** | `score.mjs` (`score` / `scoreCandidate`) | High fan-out: every persona × every panelist in a cross-model panel, aggregated into axis scores and a keep/cut verdict | Ranking or gating many candidates against a fixed rubric — "score these 20 drafts, cut the bottom half" |
-| **Agentic**      | `spawn.mjs` (`spawn`)                    | One persona, one turn, one wrapper                                                                                      | Ad hoc single-persona invocation at a call site — "would _this_ persona stop reading here?"             |
+| **Agentic, single-turn** | `spawn.mjs` (`spawn`)            | One persona, one turn, one wrapper                                                                                      | Ad hoc single-persona invocation at a call site — "would _this_ persona stop reading here?"             |
+| **Agentic, multi-turn** | `junction.mjs` (`runJunctionLoop`) | A persona walks a decision graph one junction at a time, behind a structural information barrier                      | Sequential drop-off — "will you read the next one?" for books, posts, and flows                         |
 
 `score.mjs` is rubric-shaped: it takes a `rubric` (axes, kill axes, kill
 floor, cut threshold, quorum), runs the full persona × panelist matrix through

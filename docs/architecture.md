@@ -23,6 +23,7 @@ graph TD
   index["index.mjs<br/>public surface, re-export only"]
   schema["schema.mjs"]
   isolation["isolation.mjs"]
+  jconst["junction-constants.mjs"]
   register["register.mjs"]
   score["score.mjs"]
   honesty["honesty.mjs"]
@@ -38,17 +39,23 @@ graph TD
   register --> schema
   score --> schema
   score --> isolation
+  score --> honesty
   honesty --> schema
   honesty --> register
+  calibrate --> honesty
   spawn --> register
   spawn --> score
   spawn --> isolation
+  spawn --> honesty
   runner --> register
   runner --> spawn
   junction --> score
   junction --> isolation
   junction --> jschema
-  jschema -.->|cycle| junction
+  junction --> jconst
+  junction --> honesty
+  jschema --> jconst
+  jschema --> honesty
   drift --> schema
   drift --> honesty
   drift -.->|dynamic import| packs
@@ -56,16 +63,20 @@ graph TD
 
 ### Layers
 
+The **May import from** column is the machine-readable one: `test/architecture-doc.test.mjs` parses its `L<n>` tokens (and the literals `nothing` / `all`) and fails if any real `./*.mjs` import in `src/` falls outside the layer it names.
+
 | Layer | Modules | May import from |
 |---|---|---|
-| **L0** pure leaf | `schema`, `isolation` | nothing |
-| **L1** state / stats | `register`, `calibrate` | L0 (`calibrate` imports nothing at all) |
-| **L2** engines | `score`, `honesty` | L0, L1 |
-| **L3** invocation planes | `spawn`, `junction`, `junction-schema` | L0, L1, L2 |
-| **L4** front doors | `runner`, `drift-check` | L1, L2, L3 |
+| **L0** pure leaf | `schema`, `isolation`, `junction-constants` | nothing |
+| **L1** state | `register` | L0 |
+| **L2** engines / stats | `score`, `honesty`, `calibrate` | L0, L1, L2 |
+| **L3** invocation planes | `spawn`, `junction`, `junction-schema` | L0, L1, L2, L3 |
+| **L4** front doors | `runner`, `drift-check` | L0, L1, L2, L3 |
 | **L5** surface | `index.mjs` | all |
 
-No module imports upward. **There is no filesystem, network, or database access anywhere in `src/`** — the only Node built-ins used in the whole repo are `node:test` and `node:assert` (tests) and `node:url` (the two example CLI guards). `drift-check` is the sole exception and only via dynamic `import()` of the shipped packs.
+No module imports upward. A layer that names *itself* in its own **May import from** cell permits sibling edges within that layer — `score` importing `honesty`, and `junction` importing `junction-schema`, are the two that exist. Siblings are allowed but **cycles are not**: the same test walks the real import graph and fails on any cycle, which is what keeps a same-layer edge from quietly becoming a mutual one — `junction-constants` exists precisely because `junction` and `junction-schema` once did import each other, and its own module header says so.
+
+**There is no filesystem, network, or database access anywhere in `src/`** — the only Node built-ins used in the whole repo are `node:test` and `node:assert` (tests), `node:url` (the two example CLI guards), and `node:fs` in `test/architecture-doc.test.mjs` alone, which reads this file and lists `src/lib/` to check them against each other. `drift-check` is `src/`'s sole exception to the no-I/O rule, and only via dynamic `import()` of the shipped packs.
 
 ## Module contracts
 
@@ -79,6 +90,7 @@ No module imports upward. **There is no filesystem, network, or database access 
 | `runner` | Resolves a persona by id and delegates to `spawn`. Holds no logic of its own. |
 | `junction` | Walks a persona through a decision graph one junction at a time behind a structural information barrier, until bail / terminal / budget-exhausted / invalid-decision. |
 | `junction-schema` | Defines the interpretation-free per-turn reaction and run-level trace shapes; aggregates traces without collapsing dispersion. |
+| `junction-constants` | Holds the constants shared by `junction` and `junction-schema` (currently the reserved `BAIL` decision id). A pure leaf that imports nothing, so both can depend on it without a cycle. |
 | `honesty` | Stamps, renders, and asserts the honesty caveat on panel output. |
 | `calibrate` | Joins synthetic per-persona scores to an injected real signal; ranks personas by predictive usefulness. |
 | `drift-check` | Validates this repo's own persona records against the schema; reports invalid and duplicate ids. |
@@ -122,7 +134,7 @@ All four are correct. Don't unify them.
 
 `mean` and `round2` exist in both `score` and `calibrate`. This is deliberate and commented: de-duplicating would mean widening `score`'s public surface to export numeric helpers, which is the worse trade.
 
-(`normalizeReportedDenial` is duplicated across three modules and is **not** in this category — it should be consolidated into `isolation`.)
+(`normalizeReportedDenial` was duplicated across three modules and was **not** in this category. It has since been consolidated: `isolation` holds the single definition, and `score`, `spawn` and `junction` import it, differing only in the reviewer string they pass.)
 
 ### The registry is a process-global singleton
 
@@ -134,7 +146,6 @@ Tracked rather than hidden. Remove a row when its issue closes.
 
 | Issue | What |
 |---|---|
-| Circular import | `junction` and `junction-schema` import from each other. Currently benign — neither dereferences the other's bindings at module-evaluation time — but it is safe by accident of where the references sit. |
 | Shared helpers live in `score` | `spawn` and `junction` import `renderPersona` and `extractJsonObject` from `score`. Two sibling planes depending on a third for shared primitives; those helpers are not scoring concerns. |
 
 ## Where the contract is written down
