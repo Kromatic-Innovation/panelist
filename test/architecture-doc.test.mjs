@@ -30,6 +30,11 @@ export function stripComments(src) {
  * Static relative imports (and re-exports) of one source file, as module names
  * without the `.mjs`. Dynamic `import()` is deliberately excluded — the doc
  * draws those as dotted edges, not dependency edges.
+ *
+ * Known limit: this reads text, not an AST, so `from "./x.mjs"` inside a string
+ * or template literal would be counted as an import. That direction is a false
+ * red — a spurious failure naming the phantom edge — not a missed drift, so it
+ * is left as a regex. Reach for a parser only if it ever actually fires.
  */
 export function importsOf(src) {
   const out = new Set();
@@ -170,6 +175,13 @@ test("the doc names no module that src/lib does not have", () => {
   }
   for (const mod of contractModules) {
     assert.ok(real.has(mod), `the contracts table names \`${mod}\`, which is not a module in src/`);
+  }
+  // The graph too, or a node left behind by a rename drifts forever: it has no
+  // edges to mismatch, so nothing else here would ever look at it. `packs/*` is
+  // the one legitimate non-module node (the dotted dynamic-import target).
+  for (const mod of mermaid.modules) {
+    if (mod === "packs/*") continue;
+    assert.ok(real.has(mod), `the mermaid graph declares \`${mod}\`, which is not a module in src/`);
   }
 });
 
