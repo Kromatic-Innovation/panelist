@@ -13,6 +13,8 @@ takes over.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-21
+
 **This patch pins another verdict channel closed.** On a *total* panel outage
 (zero panelists reported at all), `verdict` is now library-pinned to `"cut"`
 even when the run supplies a custom `deps.fallback` — that callback's own
