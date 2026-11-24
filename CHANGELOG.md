@@ -21,6 +21,12 @@ minor version.
 
 ### Fixed
 
+- **Object-form rubric axis descriptions now reach the model prompt
+  ([#234](https://github.com/Kromatic-Innovation/panelist/issues/234)).**
+  `axes: { clarity: "..." }` descriptions were dropped because the rubric was
+  normalized twice and the second pass, seeing an array of axes, reset
+  `axisDescriptions` to null. `normalizeRubric` is now idempotent and keeps
+  the descriptions, matching `docs/invocation-contract.md`.
 - **`providerOf` no longer treats each unrecognized model as its own provider
   ([#235](https://github.com/Kromatic-Innovation/panelist/issues/235)).**
   Unrecognized ids used to fall back to the full id, so single-vendor panels

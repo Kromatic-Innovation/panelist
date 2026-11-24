@@ -551,6 +551,19 @@ test("rankCandidatesWith: a below-quorum candidate lands in cut (not neither lis
   assert.ok(highEntry.rank < midEntry.rank, "the higher-scoring candidate ranks first");
 });
 
+test("object-form axis descriptions reach the prompt the adapter receives (panelist#234)", async () => {
+  const rubric = {
+    axes: { clarity: "Is the point obvious on first read?", credibility: "Would you trust the claims?" },
+  };
+  const captured = [];
+  const scores = { clarity: 8, credibility: 8 };
+  const panel = [capturingScorer("claude-x", scores, captured)];
+  await score(cand, reviewPack.slice(0, 1), rubric, { panel });
+  assert.equal(captured.length, 1);
+  assert.ok(captured[0].prompt.includes("Is the point obvious on first read?"));
+  assert.ok(captured[0].prompt.includes("Would you trust the claims?"));
+});
+
 test("crossModel is false for same-vendor and all-unknown panels (panelist#235)", async () => {
   const pairs = [
     ["gpt-4o", "o4-mini"],
