@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { score, scoreCandidate, decideVerdict, rankCandidatesWith } from "../src/lib/score.mjs";
+import { extractScore, score, scoreCandidate, decideVerdict, rankCandidatesWith } from "../src/lib/score.mjs";
 import { HONESTY_MARKER } from "../src/lib/honesty.mjs";
 import { fixedScorer, deadClient, toolAttemptingScorer, capturingScorer, variableScorer } from "./_helpers.mjs";
 import reviewPack from "../packs/review/index.mjs";
@@ -595,4 +595,67 @@ test("a valid kill axis below killFloor cuts; exactly at killFloor does not (pan
   const rubric = { axes: ["a", "b"], killAxes: ["a"], killFloor: 4, cut_threshold: 1 };
   assert.equal(decideVerdict({ a: 3.99, b: 9, overall: 6 }, rubric), "cut");
   assert.equal(decideVerdict({ a: 4, b: 9, overall: 6.5 }, rubric), "keep");
+});
+
+// ── Missing axis scores (panelist#247) ───────────────────────────────────────
+
+test("blank, whitespace, missing key and fraction scores parse as missing, not 0", () => {
+  const axes = ["resonance", "clarity", "credibility", "scrollStop"];
+  const s = extractScore(
+    JSON.stringify({ resonance: "", clarity: "   ", credibility: "7/10", scrollStop: 6 }),
+    axes,
+  );
+  assert.equal(s.resonance, null);
+  assert.equal(s.clarity, null);
+  assert.equal(s.credibility, null);
+  assert.equal(s.scrollStop, 6);
+  assert.equal(extractScore(JSON.stringify({ scrollStop: 6 }), axes).clarity, null);
+  assert.equal(extractScore(JSON.stringify({ resonance: "0", clarity: 0 }), axes).clarity, 0);
+});
+
+test("an all-blank reply is unparsable and does not count toward quorum", async () => {
+  const blank = { resonance: "", clarity: " ", credibility: "", scrollStop: "7/10" };
+  assert.equal(extractScore(JSON.stringify(blank), RUBRIC.axes), null);
+  const panel = [fixedScorer("claude-x", GOOD), fixedScorer("gpt-y", blank)];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
+  assert.equal(res.panelistsReported, 1);
+  assert.equal(res.failuresByCause.unparsable, 1);
+  assert.deepEqual(res.axesMissing, []);
+});
+
+test("an axis missing from every reply aggregates to null; overall uses the rest", async () => {
+  const partial = { resonance: 8, clarity: 8, credibility: "", scrollStop: 6 };
+  const panel = [fixedScorer("claude-x", partial), fixedScorer("gpt-y", { ...partial, credibility: null })];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
+  assert.equal(res.aggregate.credibility, null);
+  assert.deepEqual(res.axesMissing, ["credibility"]);
+  assert.equal(res.aggregate.overall, 7.33);
+  // credibility is a kill axis: missing must not cut on its own.
+  assert.equal(res.verdict, "keep");
+  assert.equal(res.verdictReason, "score");
+});
+
+test("decideVerdict: a null kill axis does not cut; overall still can", () => {
+  assert.equal(decideVerdict({ clarity: null, credibility: 9, overall: 9 }, RUBRIC), "keep");
+  assert.equal(decideVerdict({ clarity: null, credibility: 9, overall: 3 }, RUBRIC), "cut");
+});
+
+test("fully-scored results carry axesMissing: [] and fallbacks stamp it", async () => {
+  const ok = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: [fixedScorer("claude-x", GOOD)] });
+  assert.deepEqual(ok.axesMissing, []);
+  const dead = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: [deadClient("claude-x")] });
+  assert.deepEqual(dead.axesMissing, []);
+  const custom = await score(cand, reviewPack.slice(0, 1), RUBRIC, {
+    retries: 0,
+    panel: [deadClient("claude-x")],
+    fallback: () => ({ aggregate: { resonance: 5, clarity: null, overall: 5 } }),
+  });
+  assert.deepEqual(custom.axesMissing, ["clarity", "credibility", "scrollStop"]);
+});
+
+test("rank sorts finitely when an axis is missing everywhere", async () => {
+  const panel = [fixedScorer("claude-x", { resonance: 8, clarity: 8, credibility: 8 })];
+  const { shortlist } = await rankCandidatesWith([cand, { text: "b" }], reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
+  assert.equal(shortlist.length, 2);
+  assert.ok(Number.isFinite(shortlist[0].evaluation.aggregate.overall));
 });
