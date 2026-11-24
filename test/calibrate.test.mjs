@@ -158,3 +158,75 @@ test("calibratePersonas: default thresholds are the median of each array", () =>
   // kept = {a,b,c} (indices 0,1,2), good = {c,d,e} (indices 2,3,4) -> intersection {c} -> 1/3.
   assert.equal(result.leaderboard[0].keptSetHitRate, round2(1 / 3));
 });
+
+// ── panelist#238: missing / non-numeric data, id joins, length mismatch ─────
+
+const ITEMS4 = ["a", "b", "c", "d"];
+const row = (res) => res.leaderboard[0];
+
+test("calibratePersonas: null / NaN / undefined / numeric-string pairs are skipped; n is the pairwise count", () => {
+  const cases = [
+    { syn: [1, 2, 3, 4], real: [1, null, 3, 4] },
+    { syn: [1, NaN, 3, 4], real: [1, 2, 3, 4] },
+    { syn: [1, 2, 3, 4], real: [1, undefined, 3, 4] },
+    { syn: [1, 2, 3, 4], real: [1, "2", 3, 4] }, // numeric string is NOT a finite number
+    { syn: [1, "2", 3, 4], real: [1, 2, 3, 4] },
+  ];
+  for (const { syn, real } of cases) {
+    const res = calibratePersonas({ items: ITEMS4, syntheticByPersona: { p: syn }, realSignal: real });
+    assert.equal(row(res).n, 3);
+    assert.equal(row(res).spearman, 1); // the 3 surviving pairs are perfectly monotone
+    assert.equal(res.n, 3);
+  }
+  // Previously realSignal [1, null, 3, 4] vs [1,2,3,4] mis-ranked null; now no phantom correlation.
+  assert.equal(spearmanRankCorrelation([1, NaN, 3, 4], [1, 2, 3, 4]), 1);
+  assert.equal(spearmanRankCorrelation(["1", "2"], [1, 2]), null);
+});
+
+test("calibratePersonas: all pairs unusable -> n 0 and null correlation", () => {
+  const res = calibratePersonas({ items: ITEMS4, syntheticByPersona: { p: ["1", "2", "3", "4"] }, realSignal: [1, 2, 3, 4] });
+  assert.equal(row(res).n, 0);
+  assert.equal(row(res).spearman, null);
+});
+
+test("calibratePersonas: keyed input is joined by id, not position, in shuffled order", () => {
+  const syntheticByPersona = {
+    p: [
+      { id: "c", value: 3 },
+      { id: "a", value: 1 },
+      { id: "d", value: 4 },
+      { id: "b", value: 2 },
+    ],
+  };
+  const realSignal = { d: 40, b: 20, a: 10, c: 30 };
+  const res = calibratePersonas({ items: ITEMS4, syntheticByPersona, realSignal });
+  assert.equal(row(res).spearman, 1);
+  assert.equal(row(res).n, 4);
+  // Joined by position these would be anti-correlated-ish; confirm the id join is what matters.
+  const positional = calibratePersonas({ items: ITEMS4, syntheticByPersona: { p: [3, 1, 4, 2] }, realSignal: [40, 20, 10, 30] });
+  assert.notEqual(row(positional).spearman, 1);
+});
+
+test("calibratePersonas: a positional side is joined to a keyed side via items; missing id drops the pair", () => {
+  const res = calibratePersonas({
+    items: ITEMS4,
+    syntheticByPersona: { p: [1, 2, 3, 4] },
+    realSignal: [{ id: "d", value: 4 }, { id: "a", value: 1 }, { id: "b", value: 2 }], // "c" missing
+  });
+  assert.equal(row(res).n, 3);
+  assert.equal(row(res).spearman, 1);
+  const res2 = calibratePersonas({
+    items: ITEMS4,
+    syntheticByPersona: { p: { a: 1, b: 2, c: 3 } }, // "d" missing on the synthetic side
+    realSignal: { a: 1, b: 2, c: 3, d: 4 },
+  });
+  assert.equal(row(res2).n, 3);
+});
+
+test("calibratePersonas: positional length mismatch -> n 0 and null correlation (consistent)", () => {
+  const res = calibratePersonas({ items: ITEMS4, syntheticByPersona: { p: [1, 2, 3] }, realSignal: [1, 2, 3, 4] });
+  assert.equal(row(res).n, 0);
+  assert.equal(row(res).spearman, null);
+  assert.equal(row(res).keptSetHitRate, null);
+  assert.equal(res.n, 0);
+});
