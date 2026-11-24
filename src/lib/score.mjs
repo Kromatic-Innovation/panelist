@@ -581,7 +581,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
         let fallbackReason;
         if (cause === "unparsable") {
           fallbackReason = "unparsable reply";
-        } else if (res && "thrown" in res) {
+        } else if (res && typeof res === "object" && "thrown" in res) {
           raw = res.thrown;
           fallbackReason = "threw";
         } else {
