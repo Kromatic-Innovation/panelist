@@ -60,3 +60,59 @@ test("a deliberately-broken pack fails the drift gate (CI gate proof, #83)", asy
   const cleanReport = await scanRepo([reviewPack, businessPack]);
   assert.equal(cleanReport.ok, true);
 });
+
+// panelist#237: the CLI must run only when drift-check is the real entry module.
+import { spawnSync } from "node:child_process";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import { isEntryModule, main } from "../src/lib/drift-check.mjs";
+
+const DRIFT_PATH = fileURLToPath(new URL("../src/lib/drift-check.mjs", import.meta.url));
+const INDEX_URL = new URL("../src/index.mjs", import.meta.url).href;
+
+test("a consumer script named drift-check.mjs keeps its own exit code and output", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "panelist-drift-"));
+  try {
+    const file = join(dir, "drift-check.mjs");
+    await writeFile(
+      file,
+      `import { checkRecords } from ${JSON.stringify(INDEX_URL)};
+checkRecords([]);
+setTimeout(() => { console.log("CONSUMER-SENTINEL"); process.exitCode = 3; }, 50);
+`,
+    );
+    const r = spawnSync(process.execPath, [file], { encoding: "utf8", timeout: 30000 });
+    assert.equal(r.status, 3);
+    assert.match(r.stdout, /CONSUMER-SENTINEL/);
+    assert.doesNotMatch(r.stdout, /no drift|DRIFT DETECTED/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("running drift-check.mjs directly still prints its report and exits 0 when clean", () => {
+  const r = spawnSync(process.execPath, [DRIFT_PATH], { encoding: "utf8", timeout: 30000 });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /no drift/);
+});
+
+test("isEntryModule: true only for the real entry; false for undefined argv[1] or another script", () => {
+  const me = pathToFileURL(DRIFT_PATH).href;
+  assert.equal(isEntryModule(me, DRIFT_PATH), true);
+  assert.equal(isEntryModule(me, undefined), false);
+  assert.equal(isEntryModule(me, "/nonexistent/drift-check.mjs"), false);
+  assert.equal(isEntryModule(me, fileURLToPath(import.meta.url)), false);
+});
+
+test("main() resolves non-zero on drift (the exit-1 path of npm run drift)", async () => {
+  const bad = { id: "b", name: "B", role: "r", caresAbout: "nope", rewards: [], punishes: [], quitsWhen: [] };
+  const orig = console.log;
+  console.log = () => {};
+  try {
+    assert.equal(await main([[bad]]), 1);
+  } finally {
+    console.log = orig;
+  }
+});
