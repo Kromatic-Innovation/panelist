@@ -18,8 +18,12 @@
     "panel"
   ],
   "type": "module",
+  "types": "./src/index.d.ts",
   "exports": {
-    ".": "./src/index.mjs",
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.mjs"
+    },
     "./packs/review": "./packs/review/index.mjs",
     "./packs/business": "./packs/business/index.mjs"
   },

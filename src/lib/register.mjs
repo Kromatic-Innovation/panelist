@@ -30,6 +30,9 @@
 // use; it does not change resolution order at spawn time (spawn.mjs still only
 // ever sees `persona.modelTier`, however it got set).
 //
+// Registered records are deep-frozen private copies (panelist#251); registration
+// is atomic — if any record is invalid, nothing from that call is registered.
+//
 // Pure, zero-dep, no filesystem access.
 
 import { validatePersona, isPersonaShaped, USAGE_HEADER } from "./schema.mjs";
@@ -55,30 +58,38 @@ function* iterRecords(source) {
   }
 }
 
+/** Recursively freeze a (cloned, plain-data) value in place. */
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const v of Object.values(value)) deepFreeze(v);
+  }
+  return value;
+}
+
 /**
  * Compose one or more record sources into the in-memory registry.
  * @param {...(object[]|object)} sources
  * @returns {object[]} all registered personas after this compose
  */
 export function registerPersonas(...sources) {
+  // Two phases so a failure partway leaves the registry untouched (panelist#251):
+  // stage every rubric / usage / record first (validating and cloning), then commit.
+  const stagedRubrics = [];
+  const stagedRecords = [];
+  let stagedUsage = null;
   for (const source of sources) {
+    const isObjectSource = source && !Array.isArray(source) && typeof source === "object";
     // Rubrics travel alongside personas when a source carries them.
-    if (source && !Array.isArray(source) && typeof source === "object" && source.rubrics) {
-      for (const [key, rubric] of Object.entries(source.rubrics)) {
-        _rubrics.set(key, rubric);
-      }
+    if (isObjectSource && source.rubrics) {
+      for (const [key, rubric] of Object.entries(source.rubrics)) stagedRubrics.push([key, rubric]);
     }
     // A source may carry its own usage/honesty header; last-wins, same as rubrics.
-    if (source && !Array.isArray(source) && typeof source === "object" && typeof source.usage === "string") {
-      _usage = source.usage;
-    }
+    if (isObjectSource && typeof source.usage === "string") stagedUsage = source.usage;
     // A source may carry a default modelTier (panelist#119) applied to every
     // record it contributes that doesn't already set its own — per-record
     // modelTier always wins over this source-level default.
-    const sourceModelTier =
-      source && !Array.isArray(source) && typeof source === "object" && typeof source.modelTier === "string"
-        ? source.modelTier
-        : null;
+    const sourceModelTier = isObjectSource && typeof source.modelTier === "string" ? source.modelTier : null;
     for (const record of iterRecords(source)) {
       const { ok, errors } = validatePersona(record);
       if (!ok) {
@@ -89,9 +100,14 @@ export function registerPersonas(...sources) {
         );
       }
       const resolved = sourceModelTier != null && !("modelTier" in record) ? { ...record, modelTier: sourceModelTier } : record;
-      _personas.set(resolved.id, resolved);
+      // Store a deep-frozen private copy (panelist#251): later mutation of the
+      // caller's object cannot change the registered record, nor can a reader.
+      stagedRecords.push(deepFreeze(structuredClone(resolved)));
     }
   }
+  for (const [key, rubric] of stagedRubrics) _rubrics.set(key, rubric);
+  if (stagedUsage !== null) _usage = stagedUsage;
+  for (const record of stagedRecords) _personas.set(record.id, record);
   return getPersonas();
 }
 

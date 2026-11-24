@@ -42,6 +42,8 @@ export {
   buildEvalPrompt,
   renderPersona,
   providerOf,
+  fenceArtifact,
+  quorumRequired,
 } from "./lib/score.mjs";
 
 // Single-turn invocation contract.
