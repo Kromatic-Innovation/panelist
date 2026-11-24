@@ -29,6 +29,8 @@ export interface Rubric {
   killFloor?: number;
   cut_threshold?: number;
   quorum?: number;
+  /** Force "cut" when any persona has zero successful calls (default false). */
+  requireEveryPersona?: boolean;
   [key: string]: unknown;
 }
 
@@ -95,6 +97,10 @@ export interface ScoreDeps {
   limiter?: <T>(fn: () => Promise<T>) => Promise<T>;
   maxTokens?: number;
   temperature?: number;
+  /** Extra attempts per failed persona x model cell (default 2). */
+  retries?: number;
+  /** Base retry backoff in ms, doubled per retry (default 200). */
+  retryDelayMs?: number;
   [key: string]: unknown;
 }
 
@@ -104,9 +110,25 @@ export interface Candidate {
 }
 
 /** The evaluation envelope; large and open-ended, so loosely typed. */
+export interface FailureSampleEntry {
+  persona: string;
+  model: string;
+  cause: "transport" | "unparsable";
+  reason: string;
+}
+
 export interface Evaluation {
   verdict: string;
-  aggregate?: Record<string, number>;
+  /** A missing axis aggregates to null (see axesMissing). */
+  aggregate?: Record<string, number | null>;
+  verdictReason?: "score" | "below-quorum" | "total-outage" | "persona-missing";
+  complete?: boolean;
+  incompleteReason?: "total-outage" | "below-quorum" | "partial" | null;
+  attempts?: number;
+  personasMissing?: string[];
+  axesMissing?: string[];
+  failuresByCause?: { transport: number; unparsable: number };
+  failureSample?: FailureSampleEntry[];
   honesty: string;
   isolation: IsolationEnvelope;
   [key: string]: unknown;
@@ -132,7 +154,7 @@ export function rankCandidatesWith(
 ): Promise<Record<string, unknown>>;
 export function createLimiter(max: number): <T>(fn: () => Promise<T>) => Promise<T>;
 export function normalizeRubric(rubric?: Rubric): Record<string, unknown>;
-export function decideVerdict(aggregate: Record<string, number>, rubric?: Rubric): "keep" | "cut";
+export function decideVerdict(aggregate: Record<string, number | null>, rubric?: Rubric): "keep" | "cut";
 export function extractScore(text: unknown, axes?: string[]): Record<string, unknown> | null;
 export function extractJsonObject(text: unknown): Record<string, unknown> | null;
 export function buildEvalPrompt(args: {
@@ -177,7 +199,10 @@ export interface SpawnResult {
   mode: string;
   verdict: Record<string, unknown> | null;
   message: string;
-  dealKillers: string[];
+  /** null when the reply did not parse (parseOk false). */
+  dealKillers: string[] | null;
+  parseOk: boolean;
+  failuresByCause: { transport: number; unparsable: number };
   isolation: IsolationEnvelope;
   honesty?: string;
   [key: string]: unknown;
