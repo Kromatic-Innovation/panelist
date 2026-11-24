@@ -563,3 +563,21 @@ test("object-form axis descriptions reach the prompt the adapter receives (panel
   assert.ok(captured[0].prompt.includes("Is the point obvious on first read?"));
   assert.ok(captured[0].prompt.includes("Would you trust the claims?"));
 });
+
+test("crossModel is false for same-vendor and all-unknown panels (panelist#235)", async () => {
+  const pairs = [
+    ["gpt-4o", "o4-mini"],
+    ["mistral-large", "mistral-small"],
+    ["llama-3-8b", "llama-3-70b"],
+    ["gemma-2-2b", "gemma-2-9b"],
+    ["grok-1", "grok-2"],
+    ["mystery-a", "mystery-b"],
+  ];
+  for (const [a, b] of pairs) {
+    const panel = [fixedScorer(a, GOOD), fixedScorer(b, GOOD)];
+    const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+    assert.equal(res.crossModel, false, `${a} + ${b}`);
+  }
+  const mixed = [fixedScorer("mistral-large", GOOD), fixedScorer("gpt-4o", GOOD)];
+  assert.equal((await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: mixed })).crossModel, true);
+});
