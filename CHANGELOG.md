@@ -19,6 +19,8 @@ minor version.
 
 ## [Unreleased]
 
+**Breaking.** Node.js 22 or newer is now required (see **Breaking** below).
+
 ### Breaking
 
 - **Node.js 22 or newer is required
@@ -75,7 +77,6 @@ minor version.
   position; an id missing on either side drops that pair. A positional length
   mismatch now reports `n: 0` alongside the `null` correlation. Default keep
   and good thresholds are the medians of the usable pairs.
-**Breaking.** Node.js 22 or newer is now required (see **Breaking** below).
 
 ### Docs
 
