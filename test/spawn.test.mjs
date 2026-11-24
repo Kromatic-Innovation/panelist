@@ -21,7 +21,7 @@ test("vote with a responseSchema fills verdict and returns a well-formed wrapper
   });
   const out = await spawn("drive-by-installer", { mode: "vote", artifact, instruction: "Would you try it?", responseSchema: VOTE_SCHEMA }, { client });
   // honesty is auto-stamped on the wrapper (panelist#81).
-  assert.deepEqual(Object.keys(out).sort(), ["dealKillers", "honesty", "isolation", "message", "mode", "personaId", "verdict"]);
+  assert.deepEqual(Object.keys(out).sort(), ["dealKillers", "failuresByCause", "honesty", "isolation", "message", "mode", "parseOk", "personaId", "verdict"]);
   assert.equal(out.personaId, "drive-by-installer");
   assert.equal(out.mode, "vote");
   assert.deepEqual(out.verdict, { decision: "approve" });
@@ -44,11 +44,12 @@ test("dealKillers are always an array and are surfaced", async () => {
   assert.equal(out.verdict, null);
 });
 
-test("message falls back to raw text when the model omits a message field", async () => {
+test("message falls back to raw text when the reply is not JSON", async () => {
   const client = mockClient("claude-x", () => "just some plain text, no json");
   const out = await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
   assert.equal(out.message, "just some plain text, no json");
-  assert.deepEqual(out.dealKillers, []);
+  assert.equal(out.dealKillers, null); // unparsable reply: not a clean pass (panelist#248)
+  assert.equal(out.parseOk, false);
 });
 
 test("the default client throws — a live provider must be injected", async () => {
@@ -202,4 +203,35 @@ test("spawn omits the model key when neither opts.model nor persona.modelTier is
   await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
   assert.equal(captured.length, 1);
   assert.equal("model" in captured[0], false);
+});
+
+test("parse failures are distinguishable from a clean pass (panelist#248)", async () => {
+  const raw = (text) => mockClient("claude-x", () => text);
+  const truncated = '{"message": "Cut off", "dealKillers": ["no install command", "no lic';
+  const prose = "I think this looks fine overall, nothing blocking.";
+  const clean = JSON.stringify({ message: "Fine.", dealKillers: [] });
+
+  const t = await spawn("drive-by-installer", { mode: "comment", artifact }, { client: raw(truncated) });
+  const p = await spawn("drive-by-installer", { mode: "comment", artifact }, { client: raw(prose) });
+  const c = await spawn("drive-by-installer", { mode: "comment", artifact }, { client: raw(clean) });
+
+  assert.equal(t.parseOk, false);
+  assert.equal(t.dealKillers, null);
+  assert.deepEqual(t.failuresByCause, { transport: 0, unparsable: 1 });
+  assert.equal(t.message, truncated);
+  assert.equal(p.parseOk, false);
+  assert.equal(p.dealKillers, null);
+  assert.deepEqual(p.failuresByCause, { transport: 0, unparsable: 1 });
+  assert.equal(p.message, prose);
+  assert.equal(c.parseOk, true);
+  assert.deepEqual(c.dealKillers, []);
+  assert.deepEqual(c.failuresByCause, { transport: 0, unparsable: 0 });
+});
+
+test("a top-level JSON array reply is a parse failure, not a clean pass (panelist#248)", async () => {
+  const client = mockClient("claude-x", () => '["no install command", "no license"]');
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.equal(out.parseOk, false);
+  assert.equal(out.dealKillers, null);
+  assert.deepEqual(out.failuresByCause, { transport: 0, unparsable: 1 });
 });
