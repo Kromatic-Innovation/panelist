@@ -170,9 +170,9 @@ floor, cut threshold, quorum), runs the full persona × panelist matrix through
 `createLimiter`-bounded concurrency, and returns
 
 ```
-{ candidate, scores, aggregate, verdict, quorum, crossModel,
-  panelistsFailed, panelSize, panelistsReported, failuresByCause,
-  honesty, isolation }
+{ candidate, scores, aggregate, verdict, verdictReason, personasMissing,
+  quorum, crossModel, panelistsFailed, panelSize, panelistsReported,
+  failuresByCause, honesty, isolation }
 ```
 
 — built for volume and the cross-model anti-sycophancy guarantee
@@ -192,6 +192,23 @@ value, or omit it and have that silently pass through (panelist#176). Every
 other key — `scores`, `aggregate`, `note`, `fallback`, and any caller-added
 key — is still whatever the custom fallback emitted, with no obligation to
 provide any of them, so guard when reading these off an arbitrary result.
+
+`personasMissing` (panelist#245) is an array of persona ids (the same id form
+as `scores.byPersona[].persona`) that have **zero** successful calls — every
+panelist call for that persona failed. It is `[]` when every persona reported,
+and is present on every result: the live path and both fallback paths. On a
+total outage every persona is missing; the library stamps it even when a
+custom `deps.fallback` is used. Quorum counts persona × model cells, so a whole
+persona can drop out while quorum is still met and a verdict is still derived;
+`personasMissing` is how a caller sees that.
+
+`verdictReason` (panelist#245) says why `verdict` is what it is, and is present
+on every result. One of: `"score"` (derived by the verdict rules),
+`"below-quorum"` (quorum not met, verdict pinned to `"cut"`), `"total-outage"`
+(zero panelists reported, fallback path), or `"persona-missing"` (quorum met,
+`requireEveryPersona` on, `personasMissing` non-empty, verdict forced to
+`"cut"`). Precedence: `total-outage` > `below-quorum` > `persona-missing` >
+`score`.
 
 `spawn.mjs` is call-shaped: one `personaId`, one `{ mode, artifact, ... }`,
 one wrapper. Today that's a single model call; it's the foundation the
@@ -214,6 +231,7 @@ Every field below is caller-settable on the `rubric` object passed to `score()`
 | `killFloor`     | a finite number                                                                                              | `4.0`                                                   |
 | `cut_threshold` | a finite number                                                                                              | `5.0`                                                   |
 | `quorum`        | a finite number in `[0, 1]` inclusive                                                                        | `0.5`                                                   |
+| `requireEveryPersona` | `true` or `false`; any non-boolean is treated as `false`                                               | `false`                                                 |
 
 **`axes` accepts two shapes, and the object form does double duty.** An array
 simply names the axes. An object *also* supplies a description per axis: its
@@ -250,6 +268,13 @@ One thing `quorum: 0` does **not** do is reopen panelist#80: a panel where
 *nobody* reports returns from the total-panel-failure branch before the quorum
 check is ever reached, so disabling the floor cannot resurrect a verdict
 derived from an empty panel.
+
+**`requireEveryPersona` (panelist#245) is opt-in.** By default a persona whose
+every call failed is reported in `personasMissing` but the verdict is still
+derived from the personas that did report. With `requireEveryPersona: true`, a
+quorum-met result with a non-empty `personasMissing` gets verdict `"cut"` and
+`verdictReason: "persona-missing"`. A non-boolean value normalizes to `false`
+and never throws. The quorum formula itself is unchanged.
 
 ## Verdict schema (Decision D3 — resolved)
 
