@@ -171,7 +171,7 @@ floor, cut threshold, quorum), runs the full persona × panelist matrix through
 
 ```
 { candidate, scores, aggregate, verdict, verdictReason, personasMissing,
-  quorum, crossModel, panelistsFailed, panelSize, panelistsReported,
+  complete, incompleteReason, attempts, quorum, crossModel, panelistsFailed, panelSize, panelistsReported,
   failuresByCause, honesty, isolation }
 ```
 
@@ -209,6 +209,32 @@ on every result. One of: `"score"` (derived by the verdict rules),
 `requireEveryPersona` on, `personasMissing` non-empty, verdict forced to
 `"cut"`). Precedence: `total-outage` > `below-quorum` > `persona-missing` >
 `score`.
+
+**Retries and completeness (panelist#246).** Before the verdict is derived,
+each failed persona × model cell is retried: a transport error, an adapter
+`ok: false`, a non-string reply, or an unparsable reply all count. Defaults:
+`deps.retries = 2` (up to 3 attempts per cell) and `deps.retryDelayMs = 200`
+(exponential: `retryDelayMs * 2^(retry-1)`, i.e. 200 ms then 400 ms). Both are
+overridable through `deps`; an invalid value (non-integer or negative
+`retries`, non-finite or negative delay) falls back to the default and never
+throws. `retries: 0` disables retrying. Every attempt goes through the
+concurrency limiter separately and the backoff sleep happens outside it, so
+retries never exceed the configured concurrency. **Extra adapter calls:** a
+persistently failing cell costs up to `retries + 1` calls (3 by default), so
+budget or meter accordingly. `failuresByCause` and `panelistsFailed` count
+final failures once per cell, not per attempt. Retrying inside `spawn` or the
+junction engine is out of scope.
+
+Every result also carries `complete` (boolean), `incompleteReason` and
+`attempts` (total adapter calls made), computed after retries are exhausted.
+`incompleteReason` is `"total-outage"` (zero panelists reported),
+`"below-quorum"` (quorum not met), `"partial"` (quorum met but some cell
+failed or a persona is missing), or `null` when `complete` is `true`. A result
+whose verdict came from the outage or quorum fail-closed path therefore has
+`incompleteReason` of `"total-outage"` or `"below-quorum"` and is distinguishable
+from a score-driven verdict by this field alone. The verdict rules themselves
+are unchanged. Consumers should **not** treat a `cut` with `complete: false`
+as a judgment on the candidate: keep it for a later retry or for human review.
 
 `spawn.mjs` is call-shaped: one `personaId`, one `{ mode, artifact, ... }`,
 one wrapper. Today that's a single model call; it's the foundation the

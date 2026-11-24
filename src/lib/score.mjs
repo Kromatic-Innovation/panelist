@@ -407,6 +407,17 @@ function spansMultipleProviders(modelIds) {
 
 // ── Core scoring ─────────────────────────────────────────────────────────────
 
+// RETRY defaults (panelist#246): 2 retries = up to 3 attempts per failing cell,
+// exponential backoff 200ms, 400ms. Invalid deps values fall back to these.
+const DEFAULT_RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 200;
+function normalizeRetries(v) {
+  return Number.isInteger(v) && v >= 0 ? v : DEFAULT_RETRIES;
+}
+function normalizeRetryDelayMs(v) {
+  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_RETRY_DELAY_MS;
+}
+
 /**
  * Score a candidate across a cross-model persona panel against a rubric.
  *
@@ -420,6 +431,8 @@ function spansMultipleProviders(modelIds) {
  *   @param {function} [deps.fallback]             whole-panel-failure fallback.
  *   @param {number}   [deps.concurrency]
  *   @param {function} [deps.limiter]
+ *   @param {number}   [deps.retries]       extra attempts per failed cell (default 2; panelist#246).
+ *   @param {number}   [deps.retryDelayMs]  base backoff, doubled per retry (default 200; panelist#246).
  *   @param {number}   [deps.maxTokens]     override SCORE_MAX_TOKENS (panelist#85).
  *   @param {number}   [deps.temperature]   override DEFAULT_TEMPERATURE (panelist#85). A panel
  *     entry's own `temperature` (declared as a property on the entry itself, panelist#144) takes
@@ -466,19 +479,51 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   // run-level default for that entry only — checked via `in`, not `??`, so an
   // entry can deliberately set `temperature: undefined` to suppress the field
   // entirely rather than inherit the run default.
-  const settled = await Promise.all(
-    tasks.map((t) =>
-      run(async () => {
-        try {
-          const taskMaxTokens = "maxTokens" in t.panelist ? t.panelist.maxTokens : maxTokens;
-          const taskTemperature = "temperature" in t.panelist ? t.panelist.temperature : temperature;
-          return await t.panelist.complete({ prompt: t.prompt, maxTokens: taskMaxTokens, temperature: taskTemperature, tools: gate.tools });
-        } catch {
-          return { ok: false, reason: "threw" };
+  // RETRIES (panelist#246). Each persona x model cell gets up to `retries + 1`
+  // attempts; a cell is retried on a transport failure (throw, ok !== true,
+  // non-string text) AND on an unparsable reply. EVERY attempt goes through
+  // `run()` separately and the backoff sleep happens OUTSIDE it, so a waiting
+  // cell never holds a limiter slot and concurrency stays bounded.
+  const retries = normalizeRetries(deps.retries);
+  const retryDelayMs = normalizeRetryDelayMs(deps.retryDelayMs);
+  let attempts = 0;
+  const attemptCell = (t) =>
+    run(async () => {
+      attempts++;
+      try {
+        const taskMaxTokens = "maxTokens" in t.panelist ? t.panelist.maxTokens : maxTokens;
+        const taskTemperature = "temperature" in t.panelist ? t.panelist.temperature : temperature;
+        return await t.panelist.complete({ prompt: t.prompt, maxTokens: taskMaxTokens, temperature: taskTemperature, tools: gate.tools });
+      } catch {
+        return { ok: false, reason: "threw" };
+      }
+    });
+  const runCell = async (t) => {
+    let out;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (attempt > 0 && retryDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * 2 ** (attempt - 1)));
+      }
+      const res = await attemptCell(t);
+      // Merge the gate's own denials (recorded by gate.check() calls, if the
+      // adapter used it) with any the adapter self-reports via res.deniedToolCalls
+      // — an adapter that enforces upstream of panelist still gets denials surfaced.
+      if (res && res.ok === true && typeof res.text === "string") {
+        const reported = Array.isArray(res.deniedToolCalls) ? res.deniedToolCalls : [];
+        for (const entry of reported) {
+          const denial = normalizeReportedDenial(entry, t.persona.id || t.persona.name || "persona");
+          if (denial) reportedDenied.push(denial);
         }
-      }),
-    ),
-  );
+        const score = extractScore(res.text, norm.axes);
+        out = score ? { res, score } : { res, cause: "unparsable" };
+      } else {
+        out = { res, cause: "transport" };
+      }
+      if (!out.cause) break;
+    }
+    return out;
+  };
+  const settled = await Promise.all(tasks.map(runCell));
 
   // failuresByCause (panelist#85, PAN-16) splits WHY a panelist didn't report a
   // score: "transport" is a client/network-level failure (no usable res.text at
@@ -492,24 +537,10 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   for (let i = 0; i < tasks.length; i++) {
     const { persona, panelist } = tasks[i];
     const modelId = panelist.model || "unknown";
-    const res = settled[i];
-    if (!res || res.ok !== true || typeof res.text !== "string") {
+    const { res, score, cause } = settled[i];
+    if (cause) {
       panelistsFailed++;
-      failuresByCause.transport++;
-      continue;
-    }
-    // Merge the gate's own denials (recorded by gate.check() calls, if the
-    // adapter used it) with any the adapter self-reports via res.deniedToolCalls
-    // — an adapter that enforces upstream of panelist still gets denials surfaced.
-    const reported = Array.isArray(res.deniedToolCalls) ? res.deniedToolCalls : [];
-    for (const entry of reported) {
-      const denial = normalizeReportedDenial(entry, persona.id || persona.name || "persona");
-      if (denial) reportedDenied.push(denial);
-    }
-    const score = extractScore(res.text, norm.axes);
-    if (!score) {
-      panelistsFailed++;
-      failuresByCause.unparsable++;
+      failuresByCause[cause]++;
       continue;
     }
     const overall = axisMean(score, norm.axes);
@@ -562,6 +593,10 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
         // (panelist#245): on total outage every persona is missing.
         personasMissing,
         verdictReason: "total-outage",
+        // Completeness (panelist#246), stamped for the same reason.
+        complete: false,
+        incompleteReason: "total-outage",
+        attempts,
         aggregate: {
           ...(raw && raw.aggregate),
           overall: Number.isFinite(raw?.aggregate?.overall) ? raw.aggregate.overall : 0,
@@ -589,6 +624,14 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   const forcePersonaCut = quorumMet && norm.requireEveryPersona && personasMissing.length > 0;
   const verdictReason = !quorumMet ? "below-quorum" : forcePersonaCut ? "persona-missing" : "score";
 
+  // Completeness (panelist#246), computed AFTER retries are exhausted. This is
+  // reporting only; the verdict rules above are unchanged.
+  const incompleteReason = !quorumMet
+    ? "below-quorum"
+    : panelistsFailed > 0 || personasMissing.length > 0
+      ? "partial"
+      : null;
+
   return {
     candidate: cand,
     scores: { byPersona, byModel },
@@ -600,6 +643,13 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
         : decideVerdict(aggregate, norm),
     // verdictReason (panelist#245): why the verdict is what it is.
     verdictReason,
+    // complete / incompleteReason (panelist#246): false when any cell still
+    // failed after retries; incompleteReason says how badly. A "below-quorum"
+    // or "total-outage" cut is an outage artefact, not a judgment of the candidate.
+    complete: incompleteReason === null,
+    incompleteReason,
+    // attempts: total adapter calls made (first tries + retries).
+    attempts,
     // personasMissing: persona ids with zero successful calls ([] when all reported).
     personasMissing,
     // quorum: the panel-attrition envelope behind the verdict above. `met:false`

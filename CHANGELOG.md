@@ -55,6 +55,20 @@ minor version.
   `"persona-missing"`) when any persona is missing; it defaults to `false`, so
   default verdicts are unchanged. See `docs/invocation-contract.md`.
 
+- **`complete`/`incompleteReason` on every `score()` result, and bounded
+  retries of failed persona-by-model calls
+  ([#246](https://github.com/Kromatic-Innovation/panelist/issues/246)).**
+  A failed cell (transport error, adapter `ok: false`, unparsable reply) is now
+  retried before the verdict is derived: `deps.retries` (default `2`, so up to 3
+  attempts per cell) and `deps.retryDelayMs` (default `200`, doubled per retry).
+  Every attempt goes through the concurrency limiter and no slot is held while
+  waiting. Results carry `complete: boolean`, `incompleteReason`
+  (`"total-outage"`, `"below-quorum"`, `"partial"` or `null`) and `attempts`
+  (total adapter calls), so an outage-driven `cut` is distinguishable from a
+  score-driven one. Verdict rules are unchanged. **Extra adapter calls:** a
+  persistently failing cell now costs up to 3 calls by default; pass
+  `retries: 0` to keep the old call count. See `docs/invocation-contract.md`.
+
 ### Fixed
 
 - **Object-form rubric axis descriptions now reach the model prompt
@@ -104,6 +118,13 @@ minor version.
   and good thresholds are the medians of the usable pairs.
 
 ### Changed
+
+- **`score()` now makes up to 3 adapter calls per failing cell by default
+  ([#246](https://github.com/Kromatic-Innovation/panelist/issues/246)).**
+  Previously a failed call was final. Callers that meter or budget adapter
+  calls, or whose adapters are not idempotent, should size for the extra calls
+  or pass `retries: 0`. `failuresByCause` and `panelistsFailed` still count
+  final failures once per cell, not once per attempt.
 
 - **A custom register `usage` string no longer replaces the standard honesty
   caveat; it is now appended to

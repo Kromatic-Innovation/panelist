@@ -61,12 +61,12 @@ const READER = { id: "reader", name: "Skimming Reader", role: "impatient web rea
 /** Build one real, offline batch entry per execution plane. */
 async function buildStampedBatch() {
   const scorePanel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
-  const scoreResult = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel: scorePanel });
+  const scoreResult = await score(cand, reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel: scorePanel });
 
   const fallbackPanel = [deadClient("claude-x"), deadClient("gpt-y")];
-  const fallbackResult = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: fallbackPanel });
+  const fallbackResult = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: fallbackPanel });
 
-  const rankResult = await rankCandidatesWith([cand], reviewPack.slice(0, 2), RUBRIC, { panel: scorePanel });
+  const rankResult = await rankCandidatesWith([cand], reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel: scorePanel });
 
   clearRegistry();
   registerPersonas(reviewPack);
