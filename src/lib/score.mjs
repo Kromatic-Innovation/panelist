@@ -288,7 +288,9 @@ export function buildEvalPrompt({ persona, candidate, rubric, intro }) {
 // ── Robust JSON parsing ──────────────────────────────────────────────────────
 
 function clampScore(v) {
-  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  // A blank / whitespace-only string is MISSING, not 0: Number("") is 0
+  // (panelist#247). Fraction formats such as "7/10" stay NaN -> missing.
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
   if (!Number.isFinite(n)) return null;
   if (n < 0) return 0;
   if (n > 10) return 10;
@@ -601,12 +603,16 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
           ...(raw && raw.aggregate),
           overall: Number.isFinite(raw?.aggregate?.overall) ? raw.aggregate.overall : 0,
         },
+        // Stamped from the raw aggregate (panelist#247) so it is always present.
+        axesMissing: norm.axes.filter((a) => !Number.isFinite(raw?.aggregate?.[a])),
       },
       USAGE_HEADER,
     );
   }
 
   const aggregate = aggregateAxes(byPersona, norm.axes);
+  // axesMissing (panelist#247): axes with no value in any reply.
+  const axesMissing = norm.axes.filter((a) => !Number.isFinite(aggregate[a]));
   const byModel = {};
   for (const [model, overalls] of modelRows) byModel[model] = round2(mean(overalls));
 
@@ -636,6 +642,8 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     candidate: cand,
     scores: { byPersona, byModel },
     aggregate,
+    // axesMissing (panelist#247): axes aggregated to null ([] when none).
+    axesMissing,
     verdict: !quorumMet
       ? FALLBACK_VERDICT
       : forcePersonaCut
@@ -698,9 +706,12 @@ function aggregateAxes(byPersona, axes) {
   const agg = {};
   for (const axis of axes) {
     const vals = byPersona.map((r) => r[axis]).filter((v) => v !== null && v !== undefined);
-    agg[axis] = vals.length ? round2(mean(vals)) : 0;
+    // An axis with no values is MISSING (null), not a genuine 0 (panelist#247).
+    agg[axis] = vals.length ? round2(mean(vals)) : null;
   }
-  agg.overall = round2(mean(axes.map((a) => agg[a])));
+  // overall = mean of the non-null axes; stays finite (0 only if every axis is
+  // missing, which cannot happen while byPersona is non-empty).
+  agg.overall = round2(mean(axes.map((a) => agg[a]).filter((v) => v !== null)));
   return agg;
 }
 
@@ -741,6 +752,7 @@ function neutralFallback(candidate, panelistsFailed, rubric, shape = {}) {
     candidate,
     scores: { byPersona: [row], byModel: { "heuristic:fallback": aggregate.overall } },
     aggregate,
+    axesMissing: [],
     // Pinned to FALLBACK_VERDICT, NOT derived from the neutral scores: a total
     // panel failure must never surface a passing verdict to a programmatic gate
     // (panelist#80). The neutral 5s are still reported for human context; the

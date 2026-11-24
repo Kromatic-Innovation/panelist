@@ -167,7 +167,7 @@ floor, cut threshold, quorum), runs the full persona × panelist matrix through
 `createLimiter`-bounded concurrency, and returns
 
 ```
-{ candidate, scores, aggregate, verdict, verdictReason, personasMissing,
+{ candidate, scores, aggregate, axesMissing, verdict, verdictReason, personasMissing,
   complete, incompleteReason, attempts, quorum, crossModel, panelistsFailed, panelSize, panelistsReported,
   failuresByCause, honesty, isolation }
 ```
@@ -198,6 +198,17 @@ total outage every persona is missing; the library stamps it even when a
 custom `deps.fallback` is used. Quorum counts persona × model cells, so a whole
 persona can drop out while quorum is still met and a verdict is still derived;
 `personasMissing` is how a caller sees that.
+
+`axesMissing` (panelist#247) lists the rubric axes with no value in any
+reply. Such an axis is `null` in `aggregate` (never `0`, which would be
+indistinguishable from a genuine zero), `aggregate.overall` is the mean of the
+non-null axes, and a missing kill axis does not cut on its own. `axesMissing`
+is `[]` when nothing is missing and is present on every result; on a custom
+`deps.fallback` it is computed from the fallback's own aggregate (axes whose
+value is not a finite number). A blank or whitespace-only string score, a
+missing key, or a non-numeric string such as `"7/10"` all parse as missing
+(`null`); a reply with no parseable axis at all does not count toward quorum
+and is an `unparsable` failure.
 
 `verdictReason` (panelist#245) says why `verdict` is what it is, and is present
 on every result. One of: `"score"` (derived by the verdict rules),

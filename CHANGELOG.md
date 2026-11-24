@@ -19,8 +19,9 @@ minor version.
 
 ## [Unreleased]
 
-**Breaking.** Node.js 22 or newer is now required, and rubrics with an unknown
-`killAxes` entry now throw (see **Breaking** below).
+**Breaking.** Node.js 22 or newer is now required, rubrics with an unknown
+`killAxes` entry now throw, and an axis with no values now aggregates to `null`
+instead of `0` (see **Breaking** below).
 
 ### Breaking
 
@@ -40,6 +41,16 @@ minor version.
   contract, which `docs/invocation-contract.md` now states explicitly. Callers
   must fix or remove any `killAxes` entry that does not match an axis. Only an
   explicitly supplied `killAxes` is validated; the default (`[]`) is unchanged.
+
+- **An axis with no values now aggregates to `null`, not `0`
+  ([#247](https://github.com/Kromatic-Innovation/panelist/issues/247)).**
+  Previously an axis missing from every reply was reported as `0`,
+  indistinguishable from a genuine `0`, and could trigger a kill or cut on no
+  data. `aggregate[axis]` is now `null` for such an axis, every `score()` result
+  carries `axesMissing` (the axes with no value; `[]` when none),
+  `aggregate.overall` is the mean of the non-null axes, and a missing kill axis
+  no longer cuts on its own. **Upgrade step:** code that reads `aggregate[axis]`
+  must handle `null`.
 
 ### Added
 
@@ -70,6 +81,12 @@ minor version.
   `retries: 0` to keep the old call count. See `docs/invocation-contract.md`.
 
 ### Fixed
+
+- **Blank or whitespace-only axis scores are now missing, not `0`
+  ([#247](https://github.com/Kromatic-Innovation/panelist/issues/247)).**
+  `"trust": ""` was converted by `Number("")` to `0`, so an all-blank reply
+  counted as a reporting panelist toward quorum. Blank strings now parse as
+  missing, and a reply with no parseable axis is an `unparsable` failure.
 
 - **Object-form rubric axis descriptions now reach the model prompt
   ([#234](https://github.com/Kromatic-Innovation/panelist/issues/234)).**
