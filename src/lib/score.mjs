@@ -155,8 +155,15 @@ export function createLimiter(max) {
 /** Fill a rubric with safe defaults. */
 export function normalizeRubric(rubric = {}) {
   const r = rubric || {};
-  const axisDescriptions =
-    r.axes && typeof r.axes === "object" && !Array.isArray(r.axes) ? r.axes : null;
+  const isPlainObject = (v) => v && typeof v === "object" && !Array.isArray(v);
+  // Object-form `axes` supplies the descriptions. On a second pass (the output
+  // of normalizeRubric fed back in) `axes` is already an array, so keep an
+  // incoming `axisDescriptions` plain object to stay idempotent (panelist#234).
+  const axisDescriptions = isPlainObject(r.axes)
+    ? r.axes
+    : Array.isArray(r.axes) && isPlainObject(r.axisDescriptions)
+      ? r.axisDescriptions
+      : null;
   const axes = Array.isArray(r.axes)
     ? r.axes
     : axisDescriptions
@@ -348,12 +355,35 @@ export function extractScore(text, axes = DEFAULT_AXES) {
 
 // ── Provider bucketing for the cross-model guarantee ─────────────────────────
 
+/**
+ * Bucket a model id into a provider for the cross-model guarantee.
+ *
+ * Known vendors are matched by substring (anthropic/claude, openai/gpt,
+ * google/gemini/gemma, meta/llama, mistral/mixtral, xai/grok); the OpenAI
+ * o-series (`o1`, `o3`, `o4`, ...) is matched only when anchored at the start
+ * of the id's last `/` segment (`/^o\d/`), so unrelated ids are not captured.
+ *
+ * An unrecognized id never maps to its own full id (that made two models from
+ * one vendor look cross-model, panelist#235). Rule: if the id has a `/`, the
+ * vendor prefix before the first `/` is the provider (e.g. `acme/foo` ->
+ * `acme`); a bare unrecognized id maps to `"unknown"`. `"unknown"` is a single
+ * bucket, so any number of bare unrecognized ids count as ONE provider.
+ *
+ * @param {*} modelId
+ * @returns {string}
+ */
 export function providerOf(modelId) {
   const m = String(modelId || "").toLowerCase();
+  const tail = m.slice(m.lastIndexOf("/") + 1);
   if (m.includes("claude") || m.includes("anthropic")) return "anthropic";
-  if (m.includes("gpt") || m.includes("openai") || m.includes("o1") || m.includes("o3")) return "openai";
-  if (m.includes("gemini") || m.includes("google")) return "google";
-  return m || "unknown";
+  if (m.includes("gpt") || m.includes("openai") || /^o\d/.test(tail)) return "openai";
+  if (m.includes("gemini") || m.includes("gemma") || m.includes("google")) return "google";
+  if (m.includes("llama")) return "meta";
+  if (m.includes("mistral") || m.includes("mixtral")) return "mistral";
+  if (m.includes("grok")) return "xai";
+  const slash = m.indexOf("/");
+  if (slash > 0) return m.slice(0, slash);
+  return "unknown";
 }
 
 function spansMultipleProviders(modelIds) {

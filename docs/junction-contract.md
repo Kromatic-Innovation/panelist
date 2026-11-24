@@ -92,7 +92,17 @@ last offers none. A chain is just a graph; no special engine mode is needed.
 3. **A finite patience budget guarantees termination.** Each engaged junction burns
    its `cost` (default 1) from a patience budget seeded by `opts.patienceBudget`, then
    `graph.patience(horizon)`, then a finite default. Even a cyclic graph with a reader
-   who never bails terminates as `stopReason: "budget-exhausted"`.
+   who never bails terminates as `stopReason: "budget-exhausted"`. A junction's `cost`
+   must be a finite number greater than 0 (`Infinity`, `NaN`, `0` and negatives would
+   never spend the budget down); omit it for the default of 1. An invalid `cost` makes
+   the run throw when that junction is reached, before any turn is spent. (The check is
+   per-junction at engagement, not an up-front graph scan, so the engine still never
+   reads a junction the reader has not reached.)
+4. **A hard turn cap backstops the budget.** `opts.maxTurns` (a positive integer,
+   default `1000`, exported as `DEFAULT_MAX_TURNS`) caps the number of turns in a
+   walk. Hitting it ends the run with `stopReason: "max-turns"`, distinct from
+   `"budget-exhausted"` (a budget that runs out first, or at the same turn, wins).
+   The other stop reasons are `"bail"`, `"terminal"` and `"invalid-decision"`.
 
 ## What a consumer supplies
 

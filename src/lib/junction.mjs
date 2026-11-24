@@ -71,7 +71,7 @@ import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
 import { buildTrace, normalizeEngagement } from "./junction-schema.mjs";
 import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
-import { BAIL } from "./junction-constants.mjs";
+import { BAIL, DEFAULT_MAX_TURNS } from "./junction-constants.mjs";
 
 // BAIL is defined in the leaf junction-constants.mjs (panelist#89) so both this
 // module and junction-schema.mjs can depend on it without a cycle; re-exported here
@@ -226,6 +226,8 @@ function parseReply(text) {
  *     is fully isolated by default, same posture as spawn. No wildcards; see isolation.mjs.
  *   @param {object} [opts.toolGate]  share a gate (isolation.mjs's createToolGate) across several calls
  *     instead of runJunctionLoop building its own from opts.tools.
+ *   @param {number} [opts.maxTurns]  hard cap on turns (default DEFAULT_MAX_TURNS = 1000); hitting it ends the
+ *     walk with stopReason "max-turns" (panelist#236). Must be a positive integer.
  *   @param {number} [opts.maxTokens]     override DEFAULT_MAX_TOKENS (panelist#85).
  *   @param {number} [opts.temperature]   override DEFAULT_TEMPERATURE (panelist#85).
  * @param {object} [hooks]
@@ -238,7 +240,7 @@ function parseReply(text) {
  * @returns {Promise<{
  *   strategy: string, entry: string,
  *   path: {turn:number, junctionId:string, reaction:string, engagement:string, decision:string|null, budgetRemaining:number}[],
- *   stopReason: "bail"|"budget-exhausted"|"terminal"|"invalid-decision",
+ *   stopReason: "bail"|"budget-exhausted"|"terminal"|"invalid-decision"|"max-turns",
  *   turns: number, budgetRemaining: number,
  *   transcript: {turn:number, junctionId:string, view:object, reaction:string, engagement:string, decision:string|null}[],
  *   trace: {entryJunction:string, junctionTrace:object[], dropOff:{stoppedAt:string, reason:string}},
@@ -250,7 +252,11 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   if (!graph || typeof graph.junctions !== "object" || graph.junctions == null) {
     throw new Error("panelist junction: graph must be { junctions: {...}, entry }.");
   }
-  const { horizon, spawnStrategy = "persistent", client, patienceBudget, tools, toolGate, maxTokens, temperature } = opts;
+  const { horizon, spawnStrategy = "persistent", client, patienceBudget, tools, toolGate, maxTokens, temperature, maxTurns } = opts;
+  const maxTurnsCap = maxTurns === undefined ? DEFAULT_MAX_TURNS : maxTurns;
+  if (!Number.isInteger(maxTurnsCap) || maxTurnsCap < 1) {
+    throw new Error(`panelist junction: maxTurns must be a positive integer (got ${String(maxTurns)}).`);
+  }
   const render = RENDERERS[spawnStrategy];
   if (!render) {
     throw new Error(`panelist junction: spawnStrategy must be one of ${Object.keys(RENDERERS).join("|")} (got ${JSON.stringify(spawnStrategy)})`);
@@ -290,13 +296,28 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   // Loop invariant: `current` is always a valid junction id we have NOT yet exceeded budget for.
   while (true) {
     const junction = graph.junctions[current];
-    const cost = typeof junction.cost === "number" ? junction.cost : 1;
+    // Only a finite cost > 0 is accepted (panelist#236): 0, negative, NaN or Infinity would
+    // never trip the budget gate below. An omitted cost defaults to 1; anything else throws
+    // BEFORE a turn is spent. Checked lazily so the structural information barrier holds
+    // (the engine never reads a junction it has not reached).
+    const cost = junction.cost === undefined ? 1 : junction.cost;
+    if (typeof cost !== "number" || !Number.isFinite(cost) || cost <= 0) {
+      throw new Error(
+        `panelist junction: junction ${JSON.stringify(current)} has invalid cost ${String(cost)} — cost must be a finite number > 0 (omit it for the default of 1).`,
+      );
+    }
 
     // Patience gate: if we cannot afford to engage this junction, the persona's
     // patience is spent — the run ends WITHOUT an explicit bail (distinguishable
     // from a bail by stopReason).
     if (budget < cost) {
       stopReason = "budget-exhausted";
+      break;
+    }
+
+    // Hard turn cap (panelist#236): a backstop independent of cost/budget.
+    if (turn >= maxTurnsCap) {
+      stopReason = "max-turns";
       break;
     }
 
