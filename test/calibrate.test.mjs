@@ -230,3 +230,20 @@ test("calibratePersonas: positional length mismatch -> n 0 and null correlation 
   assert.equal(row(res).keptSetHitRate, null);
   assert.equal(res.n, 0);
 });
+
+test("calibratePersonas: numeric ids join string object keys (ids compare as strings)", () => {
+  // `{ 101: x }` has the string key "101"; it must still join items [101] and { id: 101 }.
+  const res = calibratePersonas({
+    items: [101, 102, 103],
+    syntheticByPersona: { p: [{ id: 103, value: 3 }, { id: 101, value: 1 }, { id: 102, value: 2 }] },
+    realSignal: { 101: 10, 102: 20, 103: 30 },
+  });
+  assert.equal(row(res).n, 3);
+  assert.equal(row(res).spearman, 1);
+  const positional = calibratePersonas({
+    items: [101, 102, 103],
+    syntheticByPersona: { p: [1, 2, 3] },
+    realSignal: { 101: 10, 102: 20, 103: 30 },
+  });
+  assert.equal(row(positional).n, 3);
+});

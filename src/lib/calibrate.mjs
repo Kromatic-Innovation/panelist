@@ -44,11 +44,13 @@ function isFiniteNumber(v) {
 }
 
 // A "keyed" side is an array of `{ id, value }` entries or a plain `{ [id]: value }` object.
-// Returns Map<id, value>, or null when the side is positional (a plain array of values).
+// Returns Map<String(id), value>, or null when the side is positional (a plain array of values).
+// Ids are compared as strings, because object keys are always strings (`{ 101: x }`
+// must join `items: [101]` and `{ id: 101 }`).
 function toKeyedMap(side) {
   if (Array.isArray(side)) {
     if (side.length > 0 && side.every((e) => e !== null && typeof e === "object" && "id" in e)) {
-      return new Map(side.map((e) => [e.id, e.value]));
+      return new Map(side.map((e) => [String(e.id), e.value]));
     }
     return null;
   }
@@ -213,10 +215,10 @@ export function calibratePersonas({
     if (realMap || scoreMap) {
       // Id join.
       const lookup = (map, positional) => {
-        if (map) return (id) => map.get(id);
+        if (map) return (id) => map.get(String(id));
         const m = new Map();
-        if (Array.isArray(positional)) ids.forEach((id, i) => m.set(id, positional[i]));
-        return (id) => m.get(id);
+        if (Array.isArray(positional)) ids.forEach((id, i) => m.set(String(id), positional[i]));
+        return (id) => m.get(String(id));
       };
       const universe = ids.length ? ids : [...(realMap ?? scoreMap).keys()];
       if ((!realMap || !scoreMap) && !ids.length) joinable = false; // positional side has no ids to join on
