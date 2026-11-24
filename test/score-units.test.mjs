@@ -44,6 +44,18 @@ test("providerOf falls back to the lowercased id, then 'unknown'", () => {
   assert.equal(providerOf(undefined), "unknown");
 });
 
+test("normalizeRubric is idempotent for object-form, array-form and absent axes (panelist#234)", () => {
+  for (const r of [
+    { axes: { a: "desc a", b: "desc b" }, killAxes: ["a"] },
+    { axes: ["a", "b"] },
+    {},
+  ]) {
+    const once = normalizeRubric(r);
+    assert.deepEqual(normalizeRubric(once), once);
+  }
+  assert.deepEqual(normalizeRubric(normalizeRubric({ axes: { a: "desc a" } })).axisDescriptions, { a: "desc a" });
+});
+
 // ── extractJsonObject: tolerate fences and surrounding prose ──────────────────
 
 test("extractJsonObject parses a bare JSON object", () => {
