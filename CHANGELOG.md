@@ -19,6 +19,17 @@ minor version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The junction engine never terminated when a junction's `cost` was 0,
+  negative or NaN
+  ([#236](https://github.com/Kromatic-Innovation/panelist/issues/236)).**
+  `runJunctionLoop` now accepts only a finite `cost > 0` (omitted still
+  defaults to 1); anything else, including `Infinity`, throws when that
+  junction is reached, before a turn is spent. A new hard turn cap,
+  `opts.maxTurns` (default 1000, `DEFAULT_MAX_TURNS`), ends a walk with the
+  new `stopReason: "max-turns"`. Documented in `docs/junction-contract.md`.
+
 ### Docs
 
 - **Breaking-change protocol for releases
