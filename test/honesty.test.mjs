@@ -99,3 +99,36 @@ test("assertHonestyStamped never throws on odd input", () => {
   assert.doesNotThrow(() => assertHonestyStamped(42));
   assert.equal(assertHonestyStamped(null).ok, false);
 });
+
+// ── panelist#242: a custom usage is appended to, never a replacement ───────
+import { registerPersonas } from "../src/lib/register.mjs";
+import { composeUsage } from "../src/lib/honesty.mjs";
+
+test("no custom usage: honesty is exactly the standard header", () => {
+  clearRegistry();
+  assert.equal(stampHonesty({}).honesty, USAGE_HEADER);
+  assert.equal(composeUsage(""), USAGE_HEADER);
+});
+
+test("custom usage without the marker: custom text first, then the standard caveat", () => {
+  clearRegistry();
+  registerPersonas({ usage: "Internal panel output." });
+  const stamped = stampHonesty({ verdict: "cut" });
+  assert.equal(stamped.honesty, `Internal panel output. ${USAGE_HEADER}`);
+  assert.ok(stamped.honesty.startsWith("Internal panel output."));
+  assert.equal(assertHonestyStamped(stamped).ok, true);
+  assert.ok(formatPanelSummary({ verdict: "cut" }).includes(HONESTY_MARKER));
+  assert.ok(formatPanelSummary({ verdict: "cut" }).includes("Internal panel output."));
+  assert.equal(stampHonesty({}, "Explicit.").honesty, `Explicit. ${USAGE_HEADER}`);
+  clearRegistry();
+});
+
+test("custom usage already containing the marker is not double-stamped", () => {
+  clearRegistry();
+  const custom = "House rules: this is not validation, only a pre-filter.";
+  registerPersonas({ usage: custom });
+  assert.equal(stampHonesty({}).honesty, custom);
+  assert.equal(formatPanelSummary({ verdict: "keep" }).split(HONESTY_MARKER).length - 1, 1);
+  assert.equal(assertHonestyStamped(stampHonesty({})).ok, true);
+  clearRegistry();
+});
