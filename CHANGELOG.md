@@ -21,6 +21,21 @@ minor version.
 
 ### Fixed
 
+- **Object-form rubric axis descriptions now reach the model prompt
+  ([#234](https://github.com/Kromatic-Innovation/panelist/issues/234)).**
+  `axes: { clarity: "..." }` descriptions were dropped because the rubric was
+  normalized twice and the second pass, seeing an array of axes, reset
+  `axisDescriptions` to null. `normalizeRubric` is now idempotent and keeps
+  the descriptions, matching `docs/invocation-contract.md`.
+- **`providerOf` no longer treats each unrecognized model as its own provider
+  ([#235](https://github.com/Kromatic-Innovation/panelist/issues/235)).**
+  Unrecognized ids used to fall back to the full id, so single-vendor panels
+  such as `[gpt-4o, o4-mini]` or `[mistral-large, mistral-small]` reported
+  `crossModel: true`. The vendor table now also covers the o-series
+  (anchored), `gemma`, `llama`, `mistral`/`mixtral` and `grok`; an unknown id
+  with a `vendor/` prefix maps to that prefix, and any other maps to
+  `"unknown"`. `crossModel` may now be `false` for panels that previously
+  reported `true`.
 - **The junction engine never terminated when a junction's `cost` was 0,
   negative or NaN
   ([#236](https://github.com/Kromatic-Innovation/panelist/issues/236)).**
