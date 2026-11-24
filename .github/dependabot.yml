@@ -9,3 +9,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # CodeQL refuses mismatched init/analyze versions, so every
+      # github/codeql-action path must be bumped in one PR (panelist#240).
+      codeql:
+        patterns:
+          - "github/codeql-action*"
