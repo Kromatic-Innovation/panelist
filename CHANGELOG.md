@@ -85,6 +85,17 @@ instead of `0` (see **Breaking** below).
   score-driven one. Verdict rules are unchanged. **Extra adapter calls:** a
   persistently failing cell now costs up to 3 calls by default; pass
   `retries: 0` to keep the old call count. See `docs/invocation-contract.md`.
+- **`failureSample` on every result
+  ([#249](https://github.com/Kromatic-Innovation/panelist/issues/249)).**
+  An adapter's failure reasons (the thrown message or `res.reason`) were
+  discarded and only counts survived. Every `score()` result, including both
+  fallback paths, now carries up to 5 `{ persona, model, cause, reason }`
+  entries in task order, reflecting each failed cell's final attempt. Reasons
+  are truncated to 200 characters, never include reply text, and have any
+  echoed prompt or artifact text replaced with `[redacted]`.
+  `failuresByCause` counts are unchanged. `FAILURE_SAMPLE_LIMIT` and
+  `FAILURE_REASON_MAX_CHARS` are exported from `src/lib/score.mjs`. See
+  `docs/invocation-contract.md`.
 
 ### Fixed
 

@@ -180,7 +180,7 @@ floor, cut threshold, quorum), runs the full persona × panelist matrix through
 
 ```
 { candidate, scores, aggregate, axesMissing, verdict, verdictReason, personasMissing,
-  complete, incompleteReason, attempts, quorum, crossModel, panelistsFailed, panelSize, panelistsReported,
+  complete, incompleteReason, attempts, failureSample, quorum, crossModel, panelistsFailed, panelSize, panelistsReported,
   failuresByCause, honesty, isolation }
 ```
 
@@ -255,6 +255,24 @@ whose verdict came from the outage or quorum fail-closed path therefore has
 from a score-driven verdict by this field alone. The verdict rules themselves
 are unchanged. Consumers should **not** treat a `cut` with `complete: false`
 as a judgment on the candidate: keep it for a later retry or for human review.
+
+**Failure reasons (panelist#249).** Counts alone do not say why cells failed,
+so every result (live path, built-in fallback and custom `deps.fallback`) also
+carries `failureSample`: up to `FAILURE_SAMPLE_LIMIT` (5) entries of
+`{ persona, model, cause, reason }`, in task order (persona-major, then panel
+order). `persona` is the id form used in `scores.byPersona[].persona`; `model`
+is the reply's `model` if present, else the requested `panelist.model`; `cause`
+is `"transport"` or `"unparsable"`, the same buckets as `failuresByCause`
+(whose counts are unchanged). `reason` is the thrown error's message, the
+adapter's `res.reason`, or a fixed string (`"threw"`, `"no usable text"`,
+`"unparsable reply"`). It reflects the **final** attempt of each failed cell
+when retries are on, and is truncated to `FAILURE_REASON_MAX_CHARS` (200)
+characters including a trailing `…`. Reasons never contain reply text. Any
+occurrence of the prompt or the candidate text inside an adapter-supplied
+reason is replaced with `[redacted]` before truncation, and a non-string reason
+is coerced (`String()`; an object contributes its string `message`, else
+`"non-string reason"`). The array is `[]` when no cell failed. Both constants
+are exported from `src/lib/score.mjs`.
 
 `spawn.mjs` is call-shaped: one `personaId`, one `{ mode, artifact, ... }`,
 one wrapper. Today that's a single model call; it's the foundation the
