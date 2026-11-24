@@ -19,6 +19,17 @@ minor version.
 
 ## [Unreleased]
 
+**Breaking.** Node.js 22 or newer is now required (see **Breaking** below).
+
+### Breaking
+
+- **Node.js 22 or newer is required
+  ([#241](https://github.com/Kromatic-Innovation/panelist/issues/241)).**
+  `engines.node` is now `>=22` (was `>=20`; Node 20 reached end of life on
+  2026-04-30). CI now tests a Node 22 and 24 matrix, and the release workflow
+  runs on Node 22. **Upgrade step:** upgrade to Node 22 or newer before
+  installing 0.5.0. No API changed.
+
 ### Docs
 
 - **Breaking-change protocol for releases

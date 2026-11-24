@@ -40,7 +40,7 @@ npm test          # node --test test/*.test.mjs
 npm run drift     # src/lib/drift-check.mjs — checks persona/schema records for drift
 ```
 
-panelist has zero runtime dependencies (`type: module`, Node >=20). There is no
+panelist has zero runtime dependencies (`type: module`) and requires Node.js 22 or newer. There is no
 build step; `npm test` and `npm run drift` are the two commands CI runs.
 
 ## Branch and PR conventions
