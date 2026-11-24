@@ -25,7 +25,7 @@ function failingFor(model, failFor) {
 const threeModels = (failFor) => ["claude-a", "gpt-b", "gemini-c"].map((m) => failingFor(m, failFor));
 
 test("3x3 with one persona fully failed: verdict derived, personasMissing names it (setting off)", async () => {
-  const res = await score(cand, PERSONAS, RUBRIC, { panel: threeModels("skeptic"), buildPrompt });
+  const res = await score(cand, PERSONAS, RUBRIC, { retries: 0, panel: threeModels("skeptic"), buildPrompt });
   assert.equal(res.panelistsReported, 6);
   assert.equal(res.panelSize, 9);
   assert.equal(res.quorum.met, true);
@@ -35,14 +35,14 @@ test("3x3 with one persona fully failed: verdict derived, personasMissing names 
 });
 
 test("3x3 with one persona fully failed and requireEveryPersona: cut / persona-missing", async () => {
-  const res = await score(cand, PERSONAS, { ...RUBRIC, requireEveryPersona: true }, { panel: threeModels("skeptic"), buildPrompt });
+  const res = await score(cand, PERSONAS, { ...RUBRIC, requireEveryPersona: true }, { retries: 0, panel: threeModels("skeptic"), buildPrompt });
   assert.equal(res.verdict, "cut");
   assert.equal(res.verdictReason, "persona-missing");
   assert.deepEqual(res.personasMissing, ["skeptic"]);
 });
 
 test("all personas present: empty personasMissing, no forced cut even with the setting on", async () => {
-  const res = await score(cand, PERSONAS, { ...RUBRIC, requireEveryPersona: true }, { panel: threeModels(null), buildPrompt });
+  const res = await score(cand, PERSONAS, { ...RUBRIC, requireEveryPersona: true }, { retries: 0, panel: threeModels(null), buildPrompt });
   assert.deepEqual(res.personasMissing, []);
   assert.equal(res.verdict, "keep");
   assert.equal(res.verdictReason, "score");
@@ -50,13 +50,14 @@ test("all personas present: empty personasMissing, no forced cut even with the s
 
 test("a persona with only SOME calls failing is not missing", async () => {
   const panel = [failingFor("claude-a", "skeptic"), fixedScorer("gpt-b", GOOD), fixedScorer("gemini-c", GOOD)];
-  const res = await score(cand, PERSONAS, { ...RUBRIC, requireEveryPersona: true }, { panel, buildPrompt });
+  const res = await score(cand, PERSONAS, { ...RUBRIC, requireEveryPersona: true }, { retries: 0, panel, buildPrompt });
   assert.deepEqual(res.personasMissing, []);
   assert.equal(res.verdictReason, "score");
 });
 
 test("below-quorum: verdictReason below-quorum outranks persona-missing", async () => {
   const res = await score(cand, [{ id: "optimist" }, { id: "skeptic" }], { ...RUBRIC, requireEveryPersona: true }, {
+    retries: 0,
     panel: [mockClient("claude-a", () => JSON.stringify(GOOD)), deadClient("dead-b"), deadClient("dead-c")],
     buildPrompt,
   });
@@ -66,7 +67,7 @@ test("below-quorum: verdictReason below-quorum outranks persona-missing", async 
 });
 
 test("total outage (built-in fallback): every persona missing, verdictReason total-outage", async () => {
-  const res = await score(cand, PERSONAS, RUBRIC, { panel: [deadClient("a"), deadClient("b")], buildPrompt });
+  const res = await score(cand, PERSONAS, RUBRIC, { retries: 0, panel: [deadClient("a"), deadClient("b")], buildPrompt });
   assert.equal(res.fallback, true);
   assert.deepEqual(res.personasMissing, ["optimist", "skeptic", "pragmatist"]);
   assert.equal(res.verdictReason, "total-outage");
@@ -74,7 +75,7 @@ test("total outage (built-in fallback): every persona missing, verdictReason tot
 
 test("total outage (custom deps.fallback): fields are stamped by the library", async () => {
   const fallback = () => ({ verdict: "keep", personasMissing: [], verdictReason: "score" });
-  const res = await score(cand, PERSONAS, RUBRIC, { panel: [deadClient("a")], buildPrompt, fallback });
+  const res = await score(cand, PERSONAS, RUBRIC, { retries: 0, panel: [deadClient("a")], buildPrompt, fallback });
   assert.equal(res.verdict, "cut");
   assert.deepEqual(res.personasMissing, ["optimist", "skeptic", "pragmatist"]);
   assert.equal(res.verdictReason, "total-outage");
