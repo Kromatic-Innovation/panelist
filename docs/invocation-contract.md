@@ -86,8 +86,17 @@ always overrides the source-level one.
 Every call, in every mode, returns exactly this shape:
 
 ```js
-{ personaId, mode, verdict: object | null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] }, honesty: string }
+{ personaId, mode, verdict: object | null, message: string, dealKillers: string[] | null, parseOk: boolean, failuresByCause: { transport: number, unparsable: number }, isolation: { tools: string[], denied: object[] }, honesty: string }
 ```
+
+`parseOk` is `true` when the model's reply parsed as a JSON object (nothing
+stricter — a `responseSchema` is not validated). When it is `false` (a
+truncated or non-JSON reply), `dealKillers` is `null` — **not** `[]`, so a
+parse failure can never read as "no objections" — `verdict` is `null`, and
+`message` is the raw trimmed reply text (useful to a human, not a parsed
+field). `failuresByCause` uses the same shape as `score()`: `{ transport: 0,
+unparsable: 1 }` on a parse failure, zeros otherwise. Transport failures
+(client error, no usable text) still throw rather than returning an envelope.
 
 There is one wrapper, not one-per-mode. `spawn.mjs` builds it the same way
 regardless of `mode` — mode only changes the instruction text handed to the
@@ -96,8 +105,11 @@ model and whether the prompt asks for a `verdict` field at all.
 ## Tool isolation (panelist#72)
 
 A persona's isolation from ambient tools (an MCP memory server, web search,
-filesystem search) is enforced by construction, not by prompt instruction
-alone:
+filesystem search) is governed by a deny-by-default allowlist that panelist resolves, forwards
+to the injected adapter, and reports. **The adapter is responsible for
+enforcing the forwarded allowlist** (refusing or not exposing any tool it
+does not name); panelist bundles no provider layer and cannot itself stop an
+adapter from reaching a tool:
 
 - **Deny by default.** `spawn`/`runPersona` grant **no tools** unless
   `opts.tools` names them explicitly, e.g. `{ tools: ["web"] }`.
@@ -107,7 +119,7 @@ alone:
   itself a tool, and can only be granted by naming it explicitly like any
   other — never bundled in via a wildcard.
 - **The effective set is always reported.** `isolation.tools` in the returned
-  envelope is the exact granted allowlist (`[]` means fully isolated).
+  envelope is the exact granted allowlist (`[]` means no tool was granted; whether the persona was actually isolated depends on the adapter enforcing it).
 - **Denied attempts are reported, not swallowed.** If the injected adapter
   consults the gate (`deps.toolGate`, or the one `spawn` builds internally)
   before dispatching a tool call, or self-reports via
@@ -167,9 +179,9 @@ floor, cut threshold, quorum), runs the full persona × panelist matrix through
 `createLimiter`-bounded concurrency, and returns
 
 ```
-{ candidate, scores, aggregate, verdict, quorum, crossModel,
-  panelistsFailed, panelSize, panelistsReported, failuresByCause,
-  honesty, isolation }
+{ candidate, scores, aggregate, axesMissing, verdict, verdictReason, personasMissing,
+  complete, incompleteReason, attempts, failureSample, quorum, crossModel, panelistsFailed, panelSize, panelistsReported,
+  failuresByCause, honesty, isolation }
 ```
 
 — built for volume and the cross-model anti-sycophancy guarantee
@@ -189,6 +201,78 @@ value, or omit it and have that silently pass through (panelist#176). Every
 other key — `scores`, `aggregate`, `note`, `fallback`, and any caller-added
 key — is still whatever the custom fallback emitted, with no obligation to
 provide any of them, so guard when reading these off an arbitrary result.
+
+`personasMissing` (panelist#245) is an array of persona ids (the same id form
+as `scores.byPersona[].persona`) that have **zero** successful calls — every
+panelist call for that persona failed. It is `[]` when every persona reported,
+and is present on every result: the live path and both fallback paths. On a
+total outage every persona is missing; the library stamps it even when a
+custom `deps.fallback` is used. Quorum counts persona × model cells, so a whole
+persona can drop out while quorum is still met and a verdict is still derived;
+`personasMissing` is how a caller sees that.
+
+`axesMissing` (panelist#247) lists the rubric axes with no value in any
+reply. Such an axis is `null` in `aggregate` (never `0`, which would be
+indistinguishable from a genuine zero), `aggregate.overall` is the mean of the
+non-null axes, and a missing kill axis does not cut on its own. `axesMissing`
+is `[]` when nothing is missing and is present on every result; on a custom
+`deps.fallback` it is computed from the fallback's own aggregate (axes whose
+value is not a finite number). A blank or whitespace-only string score, a
+missing key, or a non-numeric string such as `"7/10"` all parse as missing
+(`null`); a reply with no parseable axis at all does not count toward quorum
+and is an `unparsable` failure.
+
+`verdictReason` (panelist#245) says why `verdict` is what it is, and is present
+on every result. One of: `"score"` (derived by the verdict rules),
+`"below-quorum"` (quorum not met, verdict pinned to `"cut"`), `"total-outage"`
+(zero panelists reported, fallback path), or `"persona-missing"` (quorum met,
+`requireEveryPersona` on, `personasMissing` non-empty, verdict forced to
+`"cut"`). Precedence: `total-outage` > `below-quorum` > `persona-missing` >
+`score`.
+
+**Retries and completeness (panelist#246).** Before the verdict is derived,
+each failed persona × model cell is retried: a transport error, an adapter
+`ok: false`, a non-string reply, or an unparsable reply all count. Defaults:
+`deps.retries = 2` (up to 3 attempts per cell) and `deps.retryDelayMs = 200`
+(exponential: `retryDelayMs * 2^(retry-1)`, i.e. 200 ms then 400 ms). Both are
+overridable through `deps`; an invalid value (non-integer or negative
+`retries`, non-finite or negative delay) falls back to the default and never
+throws. `retries: 0` disables retrying. Every attempt goes through the
+concurrency limiter separately and the backoff sleep happens outside it, so
+retries never exceed the configured concurrency. **Extra adapter calls:** a
+persistently failing cell costs up to `retries + 1` calls (3 by default), so
+budget or meter accordingly. `failuresByCause` and `panelistsFailed` count
+final failures once per cell, not per attempt. Retrying inside `spawn` or the
+junction engine is out of scope.
+
+Every result also carries `complete` (boolean), `incompleteReason` and
+`attempts` (total adapter calls made), computed after retries are exhausted.
+`incompleteReason` is `"total-outage"` (zero panelists reported),
+`"below-quorum"` (quorum not met), `"partial"` (quorum met but some cell
+failed or a persona is missing), or `null` when `complete` is `true`. A result
+whose verdict came from the outage or quorum fail-closed path therefore has
+`incompleteReason` of `"total-outage"` or `"below-quorum"` and is distinguishable
+from a score-driven verdict by this field alone. The verdict rules themselves
+are unchanged. Consumers should **not** treat a `cut` with `complete: false`
+as a judgment on the candidate: keep it for a later retry or for human review.
+
+**Failure reasons (panelist#249).** Counts alone do not say why cells failed,
+so every result (live path, built-in fallback and custom `deps.fallback`) also
+carries `failureSample`: up to `FAILURE_SAMPLE_LIMIT` (5) entries of
+`{ persona, model, cause, reason }`, in task order (persona-major, then panel
+order). `persona` is the id form used in `scores.byPersona[].persona`; `model`
+is the reply's `model` if present, else the requested `panelist.model`; `cause`
+is `"transport"` or `"unparsable"`, the same buckets as `failuresByCause`
+(whose counts are unchanged). `reason` is the thrown error's message, the
+adapter's `res.reason`, or a fixed string (`"threw"`, `"no usable text"`,
+`"unparsable reply"`). It reflects the **final** attempt of each failed cell
+when retries are on, and is truncated to `FAILURE_REASON_MAX_CHARS` (200)
+characters including a trailing `…`. Reasons never contain reply text. Any
+occurrence of the prompt or the candidate text inside an adapter-supplied
+reason is replaced with `[redacted]` before truncation, and a non-string reason
+is coerced (`String()`; an object contributes its string `message`, else
+`"non-string reason"`). The array is `[]` when no cell failed. Both constants
+are exported from `src/lib/score.mjs`.
 
 `spawn.mjs` is call-shaped: one `personaId`, one `{ mode, artifact, ... }`,
 one wrapper. Today that's a single model call; it's the foundation the
@@ -211,6 +295,7 @@ Every field below is caller-settable on the `rubric` object passed to `score()`
 | `killFloor`     | a finite number                                                                                              | `4.0`                                                   |
 | `cut_threshold` | a finite number                                                                                              | `5.0`                                                   |
 | `quorum`        | a finite number in `[0, 1]` inclusive                                                                        | `0.5`                                                   |
+| `requireEveryPersona` | `true` or `false`; any non-boolean is treated as `false`                                               | `false`                                                 |
 
 **`axes` accepts two shapes, and the object form does double duty.** An array
 simply names the axes. An object *also* supplies a description per axis: its
@@ -247,6 +332,13 @@ One thing `quorum: 0` does **not** do is reopen panelist#80: a panel where
 *nobody* reports returns from the total-panel-failure branch before the quorum
 check is ever reached, so disabling the floor cannot resurrect a verdict
 derived from an empty panel.
+
+**`requireEveryPersona` (panelist#245) is opt-in.** By default a persona whose
+every call failed is reported in `personasMissing` but the verdict is still
+derived from the personas that did report. With `requireEveryPersona: true`, a
+quorum-met result with a non-empty `personasMissing` gets verdict `"cut"` and
+`verdictReason: "persona-missing"`. A non-boolean value normalizes to `false`
+and never throws. The quorum formula itself is unchanged.
 
 ## Verdict schema (Decision D3 — resolved)
 
@@ -354,11 +446,11 @@ const result = await spawn(
 - `verdict` is non-`null` **iff** `responseSchema` was supplied to `spawn`.
   Mode alone never turns it on — `vote` without a schema still returns
   `verdict: null`.
-- `dealKillers` is **always** an array (possibly empty), in every mode. A
-  persona may surface a blocking objection whether it's voting, commenting,
-  or conversing.
+- `dealKillers` is an array (possibly empty) in every mode whenever
+  `parseOk` is `true`, and `null` when `parseOk` is `false`. A persona may
+  surface a blocking objection whether it's voting, commenting, or conversing.
 - The wrapper shape (`personaId`, `mode`, `verdict`, `message`, `dealKillers`,
-  `isolation`) never changes across modes or across whether a schema was
+  `parseOk`, `failuresByCause`, `isolation`) never changes across modes or across whether a schema was
   supplied — only the values inside it do.
 - `isolation.tools` is **always** the exact effective allowlist (`[]` by
   default); `isolation.denied` is **always** an array (possibly empty) of

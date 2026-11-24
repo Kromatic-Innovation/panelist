@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { score, scoreCandidate, decideVerdict, rankCandidatesWith } from "../src/lib/score.mjs";
+import { extractScore, score, scoreCandidate, decideVerdict, rankCandidatesWith } from "../src/lib/score.mjs";
 import { HONESTY_MARKER } from "../src/lib/honesty.mjs";
 import { fixedScorer, deadClient, toolAttemptingScorer, capturingScorer, variableScorer } from "./_helpers.mjs";
 import reviewPack from "../packs/review/index.mjs";
@@ -20,14 +20,14 @@ test("scoreCandidate throws when no panel is injected", async () => {
 
 test("crossModel is true when the panel spans >=2 providers", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
-  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel });
   assert.equal(res.crossModel, true);
   assert.equal(res.verdict, "keep");
 });
 
 test("crossModel is false for a single-provider panel", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("claude-3-opus", GOOD)];
-  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel });
   assert.equal(res.crossModel, false);
 });
 
@@ -35,7 +35,7 @@ test("kill-floor forces a cut even when overall clears the threshold", async () 
   // clarity=2 is below killFloor 4; overall (6.5) is above cut_threshold 5.
   const killed = { resonance: 8, clarity: 2, credibility: 8, scrollStop: 8 };
   const panel = [fixedScorer("claude-x", killed), fixedScorer("gpt-y", killed)];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.ok(res.aggregate.overall >= RUBRIC.cut_threshold);
   assert.equal(res.aggregate.clarity, 2);
   assert.equal(res.verdict, "cut");
@@ -43,7 +43,7 @@ test("kill-floor forces a cut even when overall clears the threshold", async () 
 
 test("whole-panel failure returns the marked neutral fallback", async () => {
   const panel = [deadClient("claude-x"), deadClient("gpt-y")];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(res.fallback, true);
   assert.equal(res.crossModel, false);
   assert.match(res.scores.byPersona[0].note, /HUMAN REVIEW/);
@@ -55,20 +55,20 @@ test("whole-panel failure fails CLOSED — the fallback verdict is not a passing
   // `overall < cut_threshold`, so a total provider outage returned verdict:"keep"
   // — the pre-filter passed everything. This is the assertion whose absence hid it.
   const panel = [deadClient("claude-x"), deadClient("gpt-y")];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(res.fallback, true);
   assert.notEqual(res.verdict, "keep", "a dead panel must never surface a passing verdict");
   assert.equal(res.verdict, "cut", "the fallback fails closed to 'cut'");
   // Independent of the rubric's threshold: even with cut_threshold at the floor
   // (so a derived 5 would clear it), the pinned verdict must still fail closed.
   const permissive = { ...RUBRIC, cut_threshold: 0 };
-  const res2 = await score(cand, reviewPack.slice(0, 1), permissive, { panel });
+  const res2 = await score(cand, reviewPack.slice(0, 1), permissive, { retries: 0, panel });
   assert.equal(res2.verdict, "cut");
 });
 
 test("score() output is auto-stamped with the honesty caveat (panelist#6)", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
-  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel });
   assert.equal(typeof res.honesty, "string");
   assert.ok(res.honesty.length > 0);
   assert.ok(res.honesty.includes(HONESTY_MARKER));
@@ -76,7 +76,7 @@ test("score() output is auto-stamped with the honesty caveat (panelist#6)", asyn
 
 test("neutralFallback output is also stamped with the honesty caveat", async () => {
   const panel = [deadClient("claude-x"), deadClient("gpt-y")];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(res.fallback, true);
   assert.ok(res.honesty.includes(HONESTY_MARKER));
 });
@@ -91,19 +91,19 @@ test("decideVerdict cuts on low overall and on kill-axis floor", () => {
 
 test("scoreCandidate isolation defaults to [] when deps.tools is omitted", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.deepEqual(res.isolation, { tools: [], denied: [] });
 });
 
 test("scoreCandidate isolation reflects an explicit deps.tools grant", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, tools: ["recall"] });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, tools: ["recall"] });
   assert.deepEqual(res.isolation, { tools: ["recall"], denied: [] });
 });
 
 test("scoreCandidate throws on a wildcard deps.tools grant instead of silently collapsing to []", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
-  await assert.rejects(() => score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, tools: "*" }), /wildcard/);
+  await assert.rejects(() => score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, tools: "*" }), /wildcard/);
 });
 
 // The bug (panelist#77): the envelope claimed enforcement that never happened —
@@ -114,7 +114,7 @@ test("scoreCandidate throws on a wildcard deps.tools grant instead of silently c
 
 test("default → denied and recorded: no deps.tools means complete() gets no tools, and an attempt is denied", async () => {
   const panel = [toolAttemptingScorer("claude-x", "recall", GOOD)];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.deepEqual(res.isolation.tools, []);
   assert.equal(res.isolation.denied.length, 1);
   assert.equal(res.isolation.denied[0].tool, "recall");
@@ -124,7 +124,7 @@ test("default → denied and recorded: no deps.tools means complete() gets no to
 test("explicit allowlist → actually forwarded to the adapter AND permitted", async () => {
   const captured = [];
   const panel = [capturingScorer("claude-x", GOOD, captured)];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, tools: ["recall"] });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, tools: ["recall"] });
   assert.equal(captured.length, 1);
   assert.deepEqual(captured[0].tools, ["recall"], "complete() must receive the granted tools array");
   assert.deepEqual(res.isolation, { tools: ["recall"], denied: [] });
@@ -132,13 +132,13 @@ test("explicit allowlist → actually forwarded to the adapter AND permitted", a
   // Same allowlist, but the adapter actually reaches for the granted tool —
   // must be permitted (no denial), proving the forwarded array is load-bearing.
   const grantedPanel = [toolAttemptingScorer("claude-x", "recall", GOOD)];
-  const grantedRes = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: grantedPanel, tools: ["recall"] });
+  const grantedRes = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: grantedPanel, tools: ["recall"] });
   assert.deepEqual(grantedRes.isolation, { tools: ["recall"], denied: [] });
 });
 
 test("heuristic-fallback path still emits {tools:[],denied:[]} even when deps.tools is granted", async () => {
   const panel = [deadClient("claude-x"), deadClient("gpt-y")];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, tools: ["recall"] });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, tools: ["recall"] });
   assert.equal(res.fallback, true);
   assert.deepEqual(res.isolation, { tools: [], denied: [] });
 });
@@ -148,7 +148,7 @@ test("heuristic-fallback path still emits {tools:[],denied:[]} even when deps.to
 test("scoreCandidate forwards default maxTokens (512) and temperature (0) when deps omits them", async () => {
   const captured = [];
   const panel = [capturingScorer("claude-x", GOOD, captured)];
-  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(captured.length, 1);
   assert.equal(captured[0].maxTokens, 512);
   assert.equal(captured[0].temperature, 0);
@@ -157,7 +157,7 @@ test("scoreCandidate forwards default maxTokens (512) and temperature (0) when d
 test("scoreCandidate forwards deps.maxTokens/deps.temperature when supplied", async () => {
   const captured = [];
   const panel = [capturingScorer("claude-x", GOOD, captured)];
-  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, maxTokens: 2048, temperature: 0.7 });
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, maxTokens: 2048, temperature: 0.7 });
   assert.equal(captured.length, 1);
   assert.equal(captured[0].maxTokens, 2048);
   assert.equal(captured[0].temperature, 0.7);
@@ -166,7 +166,7 @@ test("scoreCandidate forwards deps.maxTokens/deps.temperature when supplied", as
 test("scoreCandidate honors an explicit temperature of 0 (nullish, not falsy, coalescing)", async () => {
   const captured = [];
   const panel = [capturingScorer("claude-x", GOOD, captured)];
-  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, temperature: 0 });
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, temperature: 0 });
   assert.equal(captured[0].temperature, 0);
 });
 
@@ -177,7 +177,7 @@ test("a panel entry's own temperature/maxTokens overrides the run-level deps def
   const capturedB = [];
   const overridden = { ...capturingScorer("reasoning-model", GOOD, capturedA), temperature: 1, maxTokens: 2048 };
   const plain = capturingScorer("claude-x", GOOD, capturedB);
-  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: [overridden, plain], temperature: 0, maxTokens: 512 });
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: [overridden, plain], temperature: 0, maxTokens: 512 });
   assert.equal(capturedA[0].temperature, 1, "the overriding entry gets its OWN temperature");
   assert.equal(capturedA[0].maxTokens, 2048, "the overriding entry gets its OWN maxTokens");
   assert.equal(capturedB[0].temperature, 0, "the plain entry still gets the run-level default");
@@ -187,7 +187,7 @@ test("a panel entry's own temperature/maxTokens overrides the run-level deps def
 test("a panel entry may declare temperature: undefined to suppress the field entirely, distinct from omitting the property", async () => {
   const captured = [];
   const suppressed = { ...capturingScorer("reasoning-model", GOOD, captured), temperature: undefined };
-  await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: [suppressed], temperature: 0 });
+  await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: [suppressed], temperature: 0 });
   assert.equal("temperature" in captured[0], true, "the key is still passed through to complete()");
   assert.equal(captured[0].temperature, undefined, "but its value is undefined, not the run-level 0");
 });
@@ -196,7 +196,7 @@ test("a panel entry may declare temperature: undefined to suppress the field ent
 
 test("panelSize and panelistsReported reflect a fully-successful run", async () => {
   const panel = [fixedScorer("claude-a", GOOD), fixedScorer("gpt-b", GOOD)];
-  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel });
   // 2 personas x 2 panelists = 4 tasks attempted, all reported.
   assert.equal(res.panelSize, 4);
   assert.equal(res.panelistsReported, 4);
@@ -211,7 +211,7 @@ test("a mixed panel (dead transport + unparsable reply) splits failuresByCause b
     },
   };
   const panel = [deadClient("dead"), unparsableClient];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   // 1 persona x 2 panelists = 2 tasks; both fail, none reports a usable score,
   // so this hits the neutralFallback path.
   assert.equal(res.fallback, true);
@@ -229,7 +229,7 @@ test("a partially-failing panel (one good, one dead, one unparsable) reports bot
     },
   };
   const panel = [fixedScorer("claude-good", GOOD), deadClient("dead"), unparsableClient];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(res.fallback, undefined);
   assert.equal(res.panelSize, 3);
   assert.equal(res.panelistsReported, 1);
@@ -255,7 +255,7 @@ test("a lone survivor at panelSize-1 failures fails CLOSED, not 'keep' (panelist
   // returned verdict:"keep". The same consumer hazard panelist#80 closed,
   // surviving partial attrition instead of total.
   const panel = [fixedScorer("claude-alive", NEUTRAL), deadClient("dead-a"), deadClient("dead-b")];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(res.panelSize, 3);
   assert.equal(res.panelistsReported, 1);
   assert.equal(res.panelistsFailed, res.panelSize - 1);
@@ -275,7 +275,7 @@ test("a lone survivor of a two-panelist panel is also below quorum (panelist#167
   // where crossModel silently drops to false — the codebase already treats a
   // single-provider result as degraded.
   const panel = [fixedScorer("claude-alive", GOOD), deadClient("dead-a")];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(res.panelSize, 2);
   assert.equal(res.panelistsReported, 1);
   assert.equal(res.verdict, "cut", "1 of 2 is not a majority");
@@ -303,7 +303,7 @@ test("a deliberately-configured single-panelist panel still derives its verdict 
 test("a panel that MEETS quorum keeps its derived verdict unchanged (panelist#167)", async () => {
   // 2 of 3 is a majority; the derived verdict applies exactly as before.
   const panel = [fixedScorer("claude-a", GOOD), fixedScorer("gpt-b", GOOD), deadClient("dead")];
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(res.panelistsReported, 2);
   assert.equal(res.panelSize, 3);
   assert.equal(res.quorum.met, true);
@@ -314,14 +314,14 @@ test("rubric.quorum is configurable through the normalization path (panelist#167
   const panel = [fixedScorer("claude-alive", GOOD), deadClient("dead-a"), deadClient("dead-b")];
   // quorum: 0 opts out of the floor entirely — a caller who genuinely wants a
   // lone-survivor result can have one.
-  const optedOut = await score(cand, reviewPack.slice(0, 1), { ...RUBRIC, quorum: 0 }, { panel });
+  const optedOut = await score(cand, reviewPack.slice(0, 1), { ...RUBRIC, quorum: 0 }, { retries: 0, panel });
   assert.equal(optedOut.quorum.required, 1);
   assert.equal(optedOut.quorum.met, true);
   assert.equal(optedOut.verdict, "keep");
 
   // quorum: 1 demands the WHOLE panel report.
   const strictPanel = [fixedScorer("claude-a", GOOD), fixedScorer("gpt-b", GOOD), deadClient("dead")];
-  const strict = await score(cand, reviewPack.slice(0, 1), { ...RUBRIC, quorum: 1 }, { panel: strictPanel });
+  const strict = await score(cand, reviewPack.slice(0, 1), { ...RUBRIC, quorum: 1 }, { retries: 0, panel: strictPanel });
   assert.equal(strict.quorum.required, 3);
   assert.equal(strict.quorum.met, false);
   assert.equal(strict.verdict, "cut");
@@ -329,7 +329,7 @@ test("rubric.quorum is configurable through the normalization path (panelist#167
 
 test("quorum: 0 cannot reopen the whole-panel fail-open (panelist#80 stays closed)", async () => {
   const panel = [deadClient("dead-a"), deadClient("dead-b")];
-  const res = await score(cand, reviewPack.slice(0, 1), { ...RUBRIC, quorum: 0, cut_threshold: 0 }, { panel });
+  const res = await score(cand, reviewPack.slice(0, 1), { ...RUBRIC, quorum: 0, cut_threshold: 0 }, { retries: 0, panel });
   assert.equal(res.fallback, true);
   assert.equal(res.verdict, "cut");
 });
@@ -345,7 +345,7 @@ test("a custom deps.fallback returning verdict:'keep' on a dead panel is pinned 
     verdict: "keep",
     fallback: true,
   });
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, fallback: customFallback });
   assert.equal(res.verdict, "cut");
 });
 
@@ -357,7 +357,7 @@ test("a custom deps.fallback omitting verdict entirely is pinned to 'cut' (panel
     aggregate: { overall: 0 },
     fallback: true,
   });
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, fallback: customFallback });
   assert.equal(res.verdict, "cut");
 });
 
@@ -370,7 +370,7 @@ test("a custom deps.fallback returning an off-vocabulary verdict is pinned to 'c
     verdict: "maybe",
     fallback: true,
   });
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, fallback: customFallback });
   assert.equal(res.verdict, "cut");
 });
 
@@ -386,7 +386,7 @@ test("the pin touches verdict only — every other custom-fallback field survive
     custom: true,
     panelistsFailed,
   });
-  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, fallback: customFallback });
   assert.equal(res.verdict, "cut");
   assert.equal(res.note, "custom note");
   assert.equal(res.custom, true);
@@ -402,7 +402,7 @@ test("through rankCandidatesWith, the pinned candidate lands in cut (not neither
     // Deliberately no `aggregate` and no `verdict` — the vanishing/crashing
     // shape this issue closes.
   });
-  const result = await rankCandidatesWith([cand], reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+  const result = await rankCandidatesWith([cand], reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, fallback: customFallback });
   assert.equal(result.shortlist.length, 0);
   assert.equal(result.cut.length, 1);
   assert.equal(result.cut[0].evaluation.verdict, "cut");
@@ -430,7 +430,7 @@ test("panelist#179 AC2: 4 personas x 2 panelists, one provider dying costs 4 tas
   // hardcoded expectation for this ONE named case (AC2) — the general matrix
   // below does not recompute this arithmetic.
   const panel = [fixedScorer("panelist-a", GOOD), deadClient("panelist-b")];
-  const res = await score(cand, reviewPack.slice(0, 4), RUBRIC, { panel });
+  const res = await score(cand, reviewPack.slice(0, 4), RUBRIC, { retries: 0, panel });
   assert.equal(res.panelSize, 8);
   assert.equal(res.panelistsReported, 4);
   assert.equal(res.quorum.required, 5);
@@ -453,7 +453,7 @@ for (const personaCount of MATRIX_PERSONA_COUNTS) {
         for (let i = 0; i < panelistCount; i++) {
           panel.push(i < deadCount ? deadClient(`dead-${i}`) : fixedScorer(`alive-${i}`, GOOD));
         }
-        const res = await score(cand, personas, RUBRIC, { panel });
+        const res = await score(cand, personas, RUBRIC, { retries: 0, panel });
 
         if (res.panelistsReported === 0) {
           // Total-outage path (panelist#80's pin): zero panelists reporting
@@ -492,7 +492,7 @@ for (const personaCount of MATRIX_PERSONA_COUNTS) {
       verdict: "keep",
       fallback: true,
     });
-    const res = await score(cand, personas, RUBRIC, { panel, fallback: customFallback });
+    const res = await score(cand, personas, RUBRIC, { retries: 0, panel, fallback: customFallback });
     // A custom deps.fallback replaces neutralFallback wholesale and is under
     // no obligation to emit panelistsReported/quorum (see score.mjs's own
     // comment on this) — but the pin is unconditional either way.
@@ -526,6 +526,7 @@ test("rankCandidatesWith: a below-quorum candidate lands in cut (not neither lis
   });
 
   const result = await rankCandidatesWith([BELOW, HIGH, MID], reviewPack.slice(0, 4), RUBRIC, {
+    retries: 0,
     panel: [panelistA, panelistB],
   });
 
@@ -558,7 +559,7 @@ test("object-form axis descriptions reach the prompt the adapter receives (panel
   const captured = [];
   const scores = { clarity: 8, credibility: 8 };
   const panel = [capturingScorer("claude-x", scores, captured)];
-  await score(cand, reviewPack.slice(0, 1), rubric, { panel });
+  await score(cand, reviewPack.slice(0, 1), rubric, { retries: 0, panel });
   assert.equal(captured.length, 1);
   assert.ok(captured[0].prompt.includes("Is the point obvious on first read?"));
   assert.ok(captured[0].prompt.includes("Would you trust the claims?"));
@@ -575,17 +576,17 @@ test("crossModel is false for same-vendor and all-unknown panels (panelist#235)"
   ];
   for (const [a, b] of pairs) {
     const panel = [fixedScorer(a, GOOD), fixedScorer(b, GOOD)];
-    const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+    const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
     assert.equal(res.crossModel, false, `${a} + ${b}`);
   }
   const mixed = [fixedScorer("mistral-large", GOOD), fixedScorer("gpt-4o", GOOD)];
-  assert.equal((await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: mixed })).crossModel, true);
+  assert.equal((await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: mixed })).crossModel, true);
 });
 
 test("score() throws on an unknown kill axis (panelist#244)", async () => {
   const panel = [fixedScorer("claude-x", GOOD)];
   await assert.rejects(
-    () => score(cand, reviewPack.slice(0, 1), { ...RUBRIC, killAxes: ["clarty"] }, { panel }),
+    () => score(cand, reviewPack.slice(0, 1), { ...RUBRIC, killAxes: ["clarty"] }, { retries: 0, panel }),
     /clarty/,
   );
 });
@@ -594,4 +595,67 @@ test("a valid kill axis below killFloor cuts; exactly at killFloor does not (pan
   const rubric = { axes: ["a", "b"], killAxes: ["a"], killFloor: 4, cut_threshold: 1 };
   assert.equal(decideVerdict({ a: 3.99, b: 9, overall: 6 }, rubric), "cut");
   assert.equal(decideVerdict({ a: 4, b: 9, overall: 6.5 }, rubric), "keep");
+});
+
+// ── Missing axis scores (panelist#247) ───────────────────────────────────────
+
+test("blank, whitespace, missing key and fraction scores parse as missing, not 0", () => {
+  const axes = ["resonance", "clarity", "credibility", "scrollStop"];
+  const s = extractScore(
+    JSON.stringify({ resonance: "", clarity: "   ", credibility: "7/10", scrollStop: 6 }),
+    axes,
+  );
+  assert.equal(s.resonance, null);
+  assert.equal(s.clarity, null);
+  assert.equal(s.credibility, null);
+  assert.equal(s.scrollStop, 6);
+  assert.equal(extractScore(JSON.stringify({ scrollStop: 6 }), axes).clarity, null);
+  assert.equal(extractScore(JSON.stringify({ resonance: "0", clarity: 0 }), axes).clarity, 0);
+});
+
+test("an all-blank reply is unparsable and does not count toward quorum", async () => {
+  const blank = { resonance: "", clarity: " ", credibility: "", scrollStop: "7/10" };
+  assert.equal(extractScore(JSON.stringify(blank), RUBRIC.axes), null);
+  const panel = [fixedScorer("claude-x", GOOD), fixedScorer("gpt-y", blank)];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
+  assert.equal(res.panelistsReported, 1);
+  assert.equal(res.failuresByCause.unparsable, 1);
+  assert.deepEqual(res.axesMissing, []);
+});
+
+test("an axis missing from every reply aggregates to null; overall uses the rest", async () => {
+  const partial = { resonance: 8, clarity: 8, credibility: "", scrollStop: 6 };
+  const panel = [fixedScorer("claude-x", partial), fixedScorer("gpt-y", { ...partial, credibility: null })];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
+  assert.equal(res.aggregate.credibility, null);
+  assert.deepEqual(res.axesMissing, ["credibility"]);
+  assert.equal(res.aggregate.overall, 7.33);
+  // credibility is a kill axis: missing must not cut on its own.
+  assert.equal(res.verdict, "keep");
+  assert.equal(res.verdictReason, "score");
+});
+
+test("decideVerdict: a null kill axis does not cut; overall still can", () => {
+  assert.equal(decideVerdict({ clarity: null, credibility: 9, overall: 9 }, RUBRIC), "keep");
+  assert.equal(decideVerdict({ clarity: null, credibility: 9, overall: 3 }, RUBRIC), "cut");
+});
+
+test("fully-scored results carry axesMissing: [] and fallbacks stamp it", async () => {
+  const ok = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: [fixedScorer("claude-x", GOOD)] });
+  assert.deepEqual(ok.axesMissing, []);
+  const dead = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: [deadClient("claude-x")] });
+  assert.deepEqual(dead.axesMissing, []);
+  const custom = await score(cand, reviewPack.slice(0, 1), RUBRIC, {
+    retries: 0,
+    panel: [deadClient("claude-x")],
+    fallback: () => ({ aggregate: { resonance: 5, clarity: null, overall: 5 } }),
+  });
+  assert.deepEqual(custom.axesMissing, ["clarity", "credibility", "scrollStop"]);
+});
+
+test("rank sorts finitely when an axis is missing everywhere", async () => {
+  const panel = [fixedScorer("claude-x", { resonance: 8, clarity: 8, credibility: 8 })];
+  const { shortlist } = await rankCandidatesWith([cand, { text: "b" }], reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
+  assert.equal(shortlist.length, 2);
+  assert.ok(Number.isFinite(shortlist[0].evaluation.aggregate.overall));
 });

@@ -310,7 +310,7 @@ test("rankCandidatesWith ranks by overall and splits keep vs cut", async () => {
 });
 
 test("rankCandidatesWith returns empty splits for no candidates", async () => {
-  const out = await rankCandidatesWith([], reviewPack.slice(0, 1), {}, { panel: [fixedScorer("m", {})] });
+  const out = await rankCandidatesWith([], reviewPack.slice(0, 1), {}, { retries: 0, panel: [fixedScorer("m", {})] });
   assert.deepEqual(out.shortlist, []);
   assert.deepEqual(out.cut, []);
 });

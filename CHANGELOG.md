@@ -6,8 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Pre-1.0 (0.x) semantics apply.** While panelist is at a `0.x` major version,
-MINOR releases (`0.x.0`) may include breaking changes, and PATCH releases
-(`0.0.x`) are reserved for backwards-compatible fixes. Once the project
+MINOR releases (`0.x.0`) are for breaking or behaviour-changing releases, and
+PATCH releases (`0.x.y`) are reserved for backwards-compatible fixes. Once the project
 reaches `1.0.0`, standard semver discipline (breaking changes only on MAJOR)
 takes over.
 
@@ -19,10 +19,17 @@ minor version.
 
 ## [Unreleased]
 
-**Breaking.** Node.js 22 or newer is now required, and rubrics with an unknown
-`killAxes` entry now throw (see **Breaking** below).
+**Breaking.** Node.js 22 or newer is now required, rubrics with an unknown
+`killAxes` entry now throw, and an axis with no values now aggregates to `null`
+instead of `0` (see **Breaking** below).
 
 ### Breaking
+
+- **`spawn()` / `runPersona()` `dealKillers` may now be `null`
+  ([#248](https://github.com/Kromatic-Innovation/panelist/issues/248)).**
+  When the reply does not parse as a JSON object, `dealKillers` is `null`
+  instead of `[]`. Callers doing `result.dealKillers.length` must check
+  `result.parseOk` (or null-guard) first.
 
 - **Node.js 22 or newer is required
   ([#241](https://github.com/Kromatic-Innovation/panelist/issues/241)).**
@@ -41,14 +48,61 @@ minor version.
   must fix or remove any `killAxes` entry that does not match an axis. Only an
   explicitly supplied `killAxes` is validated; the default (`[]`) is unchanged.
 
+- **An axis with no values now aggregates to `null`, not `0`
+  ([#247](https://github.com/Kromatic-Innovation/panelist/issues/247)).**
+  Previously an axis missing from every reply was reported as `0`,
+  indistinguishable from a genuine `0`, and could trigger a kill or cut on no
+  data. `aggregate[axis]` is now `null` for such an axis, every `score()` result
+  carries `axesMissing` (the axes with no value; `[]` when none),
+  `aggregate.overall` is the mean of the non-null axes, and a missing kill axis
+  no longer cuts on its own. **Upgrade step:** code that reads `aggregate[axis]`
+  must handle `null`.
+
+### Added
+
+- **`personasMissing`, `verdictReason` and the `requireEveryPersona` rubric
+  setting
+  ([#245](https://github.com/Kromatic-Innovation/panelist/issues/245)).**
+  Quorum counts persona-by-model cells, so a whole persona could drop out and a
+  verdict was still derived with nothing flagging it. Every `score()` result
+  (live path and both fallback paths) now carries `personasMissing`, the ids of
+  personas with zero successful calls, and `verdictReason`, one of `"score"`,
+  `"below-quorum"`, `"total-outage"` or `"persona-missing"`. The new rubric
+  setting `requireEveryPersona: true` forces the verdict to `"cut"` (reason
+  `"persona-missing"`) when any persona is missing; it defaults to `false`, so
+  default verdicts are unchanged. See `docs/invocation-contract.md`.
+
+- **`complete`/`incompleteReason` on every `score()` result, and bounded
+  retries of failed persona-by-model calls
+  ([#246](https://github.com/Kromatic-Innovation/panelist/issues/246)).**
+  A failed cell (transport error, adapter `ok: false`, unparsable reply) is now
+  retried before the verdict is derived: `deps.retries` (default `2`, so up to 3
+  attempts per cell) and `deps.retryDelayMs` (default `200`, doubled per retry).
+  Every attempt goes through the concurrency limiter and no slot is held while
+  waiting. Results carry `complete: boolean`, `incompleteReason`
+  (`"total-outage"`, `"below-quorum"`, `"partial"` or `null`) and `attempts`
+  (total adapter calls), so an outage-driven `cut` is distinguishable from a
+  score-driven one. Verdict rules are unchanged. **Extra adapter calls:** a
+  persistently failing cell now costs up to 3 calls by default; pass
+  `retries: 0` to keep the old call count. See `docs/invocation-contract.md`.
+- **`failureSample` on every result
+  ([#249](https://github.com/Kromatic-Innovation/panelist/issues/249)).**
+  An adapter's failure reasons (the thrown message or `res.reason`) were
+  discarded and only counts survived. Every `score()` result, including both
+  fallback paths, now carries up to 5 `{ persona, model, cause, reason }`
+  entries in task order, reflecting each failed cell's final attempt. Reasons
+  are truncated to 200 characters, never include reply text, and have any
+  echoed prompt or artifact text replaced with `[redacted]`.
+  `failuresByCause` counts are unchanged. `FAILURE_SAMPLE_LIMIT` and
+  `FAILURE_REASON_MAX_CHARS` are exported from `src/lib/score.mjs`. See
+  `docs/invocation-contract.md`.
+
 - **Registered personas are now frozen copies, and a junction may not be named
   `"bail"` ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
   Code that mutates a persona returned by `getPersona`/`getPersonas` now throws
   in strict mode (ESM) instead of silently editing the registry; build a new
   record and `registerPersonas` it instead. A junction graph with a junction
   keyed `"bail"` now throws from `runJunctionLoop`; rename that junction.
-
-### Added
 
 - **`fenceArtifact` and `quorumRequired` are now exported from the package
   entry ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
@@ -64,6 +118,21 @@ minor version.
   exports.
 
 ### Fixed
+
+- **Blank or whitespace-only axis scores are now missing, not `0`
+  ([#247](https://github.com/Kromatic-Innovation/panelist/issues/247)).**
+  `"trust": ""` was converted by `Number("")` to `0`, so an all-blank reply
+  counted as a reporting panelist toward quorum. Blank strings now parse as
+  missing, and a reply with no parseable axis is an `unparsable` failure.
+
+- **`spawn` no longer hides parse failures
+  ([#248](https://github.com/Kromatic-Innovation/panelist/issues/248)).**
+  A truncated or non-JSON reply used to return `dealKillers: []`, which read as
+  "no objections". Every spawn envelope now carries `parseOk: boolean` and
+  `failuresByCause` (the same `{ transport, unparsable }` shape `score()` uses;
+  `unparsable: 1` on a parse failure). On a parse failure `dealKillers` is
+  `null` (shape change: consumers must handle `null`) and `message` stays the
+  raw trimmed reply text. Transport failures still throw.
 
 - **Object-form rubric axis descriptions now reach the model prompt
   ([#234](https://github.com/Kromatic-Innovation/panelist/issues/234)).**
@@ -113,6 +182,13 @@ minor version.
 
 ### Changed
 
+- **`score()` now makes up to 3 adapter calls per failing cell by default
+  ([#246](https://github.com/Kromatic-Innovation/panelist/issues/246)).**
+  Previously a failed call was final. Callers that meter or budget adapter
+  calls, or whose adapters are not idempotent, should size for the extra calls
+  or pass `retries: 0`. `failuresByCause` and `panelistsFailed` still count
+  final failures once per cell, not once per attempt.
+
 - **`registerPersonas` stores a deep-frozen copy of each record, and is atomic
   ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
   The registry used to keep the caller's own object, so editing it after
@@ -143,6 +219,15 @@ minor version.
 
 ### Docs
 
+- **Tool-isolation wording corrected, and a 0.4.2 semver note
+  ([#243](https://github.com/Kromatic-Innovation/panelist/issues/243)).**
+  The README and `docs/invocation-contract.md` no longer claim isolation is
+  "by construction": panelist resolves a deny-by-default allowlist, forwards
+  it to the adapter, and reports it (`isolation.tools`, `isolation.denied`),
+  and the adapter is responsible for enforcing it. The `0.4.2` entry now
+  notes that its verdict change should have been a minor release, and the 0.x
+  scheme description above no longer mislabels patch releases as `0.0.x`.
+
 - **Breaking-change protocol for releases
   ([#233](https://github.com/Kromatic-Innovation/panelist/issues/233)).**
   `CONTRIBUTING.md`'s release steps now require a `### Breaking` section in
@@ -167,6 +252,12 @@ returned `"cut"` and is unaffected, and panels that report at least one
 panelist are unaffected. The change is fail-closed by design, the same
 posture `0.4.0` gave the built-in fallback and `0.4.1` gave partial quorum
 attrition — see **Fixed**.
+
+**Semver note.** The total-outage verdict change
+([#176](https://github.com/Kromatic-Innovation/panelist/issues/176)) was
+behaviour-changing for callers with a custom `deps.fallback`. Under the 0.x
+policy above it should have shipped as a minor release (`0.5.0`), not a patch.
+The `0.4.2` tag is left as published.
 
 ### Fixed
 
