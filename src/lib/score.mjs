@@ -68,6 +68,34 @@ const DEFAULT_CONCURRENCY = 8;
 const SCORE_MAX_TOKENS = 512;
 const DEFAULT_TEMPERATURE = 0;
 
+// failureSample (panelist#249): at most FAILURE_SAMPLE_LIMIT failed cells are
+// described on the result, each reason capped at FAILURE_REASON_MAX_CHARS
+// (including the trailing "…").
+export const FAILURE_SAMPLE_LIMIT = 5;
+export const FAILURE_REASON_MAX_CHARS = 200;
+
+// Coerce whatever an adapter (or a thrown value) supplied into a bounded,
+// redacted string. Never throws. Never uses reply text. Any occurrence of the
+// prompt or the candidate text is replaced BEFORE truncation.
+function sanitizeReason(raw, fallback, prompt, candidateText) {
+  let reason;
+  if (typeof raw === "string") reason = raw;
+  else if (raw === null || raw === undefined) reason = "";
+  else if (typeof raw === "object") reason = typeof raw.message === "string" ? raw.message : "non-string reason";
+  else {
+    try {
+      reason = String(raw);
+    } catch {
+      reason = "non-string reason";
+    }
+  }
+  if (reason.trim() === "") reason = fallback;
+  for (const secret of [prompt, candidateText]) {
+    if (typeof secret === "string" && secret !== "") reason = reason.split(secret).join("[redacted]");
+  }
+  return reason.length > FAILURE_REASON_MAX_CHARS ? reason.slice(0, FAILURE_REASON_MAX_CHARS - 1) + "…" : reason;
+}
+
 // The neutral score stamped on every axis when the WHOLE panel fails and no
 // custom fallback is supplied. Named here so its collision with
 // DEFAULT_CUT_THRESHOLD (both 5) is visible at the point of definition: a
@@ -496,8 +524,9 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
         const taskMaxTokens = "maxTokens" in t.panelist ? t.panelist.maxTokens : maxTokens;
         const taskTemperature = "temperature" in t.panelist ? t.panelist.temperature : temperature;
         return await t.panelist.complete({ prompt: t.prompt, maxTokens: taskMaxTokens, temperature: taskTemperature, tools: gate.tools });
-      } catch {
-        return { ok: false, reason: "threw" };
+      } catch (err) {
+        // The thrown message is kept (as `thrown`) for failureSample (panelist#249).
+        return { ok: false, reason: "threw", thrown: err };
       }
     });
   const runCell = async (t) => {
@@ -535,6 +564,9 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   // maxTokens knob are fixed together: a caller who sees unparsable failures
   // climb has a concrete first lever (deps.maxTokens) to try.
   const failuresByCause = { transport: 0, unparsable: 0 };
+  // failureSample (panelist#249): first FAILURE_SAMPLE_LIMIT failed cells in
+  // task order; reasons reflect each cell's FINAL attempt.
+  const failureSample = [];
 
   for (let i = 0; i < tasks.length; i++) {
     const { persona, panelist } = tasks[i];
@@ -543,6 +575,26 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     if (cause) {
       panelistsFailed++;
       failuresByCause[cause]++;
+      if (failureSample.length < FAILURE_SAMPLE_LIMIT) {
+        const t = tasks[i];
+        let raw;
+        let fallbackReason;
+        if (cause === "unparsable") {
+          fallbackReason = "unparsable reply";
+        } else if (res && "thrown" in res) {
+          raw = res.thrown;
+          fallbackReason = "threw";
+        } else {
+          raw = res ? res.reason : undefined;
+          fallbackReason = "no usable text";
+        }
+        failureSample.push({
+          persona: persona.id || persona.name || "persona",
+          model: (res && typeof res.model === "string" && res.model) || modelId,
+          cause,
+          reason: cause === "unparsable" ? fallbackReason : sanitizeReason(raw, fallbackReason, t.prompt, cand.text),
+        });
+      }
       continue;
     }
     const overall = axisMean(score, norm.axes);
@@ -594,6 +646,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
         // Stamped here so a custom deps.fallback can't omit or falsify them
         // (panelist#245): on total outage every persona is missing.
         personasMissing,
+        failureSample,
         verdictReason: "total-outage",
         // Completeness (panelist#246), stamped for the same reason.
         complete: false,
@@ -660,6 +713,8 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     attempts,
     // personasMissing: persona ids with zero successful calls ([] when all reported).
     personasMissing,
+    // failureSample (panelist#249): bounded, redacted reasons for failed cells.
+    failureSample,
     // quorum: the panel-attrition envelope behind the verdict above. `met:false`
     // means the verdict was pinned closed, not derived.
     quorum: {
