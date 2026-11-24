@@ -41,6 +41,20 @@ minor version.
   must fix or remove any `killAxes` entry that does not match an axis. Only an
   explicitly supplied `killAxes` is validated; the default (`[]`) is unchanged.
 
+### Added
+
+- **`personasMissing`, `verdictReason` and the `requireEveryPersona` rubric
+  setting
+  ([#245](https://github.com/Kromatic-Innovation/panelist/issues/245)).**
+  Quorum counts persona-by-model cells, so a whole persona could drop out and a
+  verdict was still derived with nothing flagging it. Every `score()` result
+  (live path and both fallback paths) now carries `personasMissing`, the ids of
+  personas with zero successful calls, and `verdictReason`, one of `"score"`,
+  `"below-quorum"`, `"total-outage"` or `"persona-missing"`. The new rubric
+  setting `requireEveryPersona: true` forces the verdict to `"cut"` (reason
+  `"persona-missing"`) when any persona is missing; it defaults to `false`, so
+  default verdicts are unchanged. See `docs/invocation-contract.md`.
+
 ### Fixed
 
 - **Object-form rubric axis descriptions now reach the model prompt

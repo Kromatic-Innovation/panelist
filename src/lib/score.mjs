@@ -189,7 +189,10 @@ export function normalizeRubric(rubric = {}) {
   // the default rather than throwing, consistent with every other field here.
   const quorum =
     Number.isFinite(r.quorum) && r.quorum >= 0 && r.quorum <= 1 ? r.quorum : DEFAULT_QUORUM;
-  return { axes, killAxes, killFloor, cut_threshold, quorum, axisDescriptions };
+  // requireEveryPersona (panelist#245): opt-in. When true, a persona with zero
+  // successful calls forces the verdict to "cut". Non-boolean -> false.
+  const requireEveryPersona = r.requireEveryPersona === true;
+  return { axes, killAxes, killFloor, cut_threshold, quorum, requireEveryPersona, axisDescriptions };
 }
 
 // ── Default prompt construction (overridable via deps.buildPrompt) ────────────
@@ -523,6 +526,12 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     modelRows.get(key).push(overall);
   }
 
+  // personasMissing (panelist#245): persona ids (same id form as
+  // byPersona[].persona) with zero successful calls, in input order.
+  const personaId = (p) => p.id || p.name || "persona";
+  const reportedIds = new Set(byPersona.map((r) => r.persona));
+  const personasMissing = [...new Set(people.map(personaId))].filter((id) => !reportedIds.has(id));
+
   if (byPersona.length === 0) {
     const fb = deps.fallback || neutralFallback;
     const raw = fb(cand, panelistsFailed, norm, { panelSize: tasks.length, failuresByCause });
@@ -549,6 +558,10 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
       {
         ...raw,
         verdict: FALLBACK_VERDICT,
+        // Stamped here so a custom deps.fallback can't omit or falsify them
+        // (panelist#245): on total outage every persona is missing.
+        personasMissing,
+        verdictReason: "total-outage",
         aggregate: {
           ...(raw && raw.aggregate),
           overall: Number.isFinite(raw?.aggregate?.overall) ? raw.aggregate.overall : 0,
@@ -571,12 +584,24 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   // exactly as before.
   const required = quorumRequired(tasks.length, norm.quorum);
   const quorumMet = byPersona.length >= required;
+  // Precedence: below-quorum > persona-missing > score (total-outage returned
+  // above). The persona-missing override lives here, not in decideVerdict.
+  const forcePersonaCut = quorumMet && norm.requireEveryPersona && personasMissing.length > 0;
+  const verdictReason = !quorumMet ? "below-quorum" : forcePersonaCut ? "persona-missing" : "score";
 
   return {
     candidate: cand,
     scores: { byPersona, byModel },
     aggregate,
-    verdict: quorumMet ? decideVerdict(aggregate, norm) : FALLBACK_VERDICT,
+    verdict: !quorumMet
+      ? FALLBACK_VERDICT
+      : forcePersonaCut
+        ? "cut"
+        : decideVerdict(aggregate, norm),
+    // verdictReason (panelist#245): why the verdict is what it is.
+    verdictReason,
+    // personasMissing: persona ids with zero successful calls ([] when all reported).
+    personasMissing,
     // quorum: the panel-attrition envelope behind the verdict above. `met:false`
     // means the verdict was pinned closed, not derived.
     quorum: {
