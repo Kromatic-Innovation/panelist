@@ -35,6 +35,9 @@ See [`docs/synthetic-persona-best-practices.md`](docs/synthetic-persona-best-pra
 npm i panelist
 ```
 
+Requires **Node.js 22 or newer** (`engines.node: ">=22"`; CI tests Node 22 and
+24).
+
 panelist is published to the public npm registry as the unscoped package
 `panelist` (via OIDC Trusted Publishing — no token needed): owned by Kromatic
 Innovation; published to npm from the `trikro` account. No `.npmrc` changes

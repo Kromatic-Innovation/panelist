@@ -5,7 +5,7 @@ import { PANELIST_VERSION } from "../src/index.mjs";
 
 // package.json is read via createRequire rather than fs or an import
 // attribute (`with { type: "json" }`) — this is the most robust form on the
-// repo's Node floor (engines: >=20, CI pins node 20) and keeps the repo's
+// repo's Node floor (engines: >=22, CI matrix on node 22 and 24) and keeps the repo's
 // zero `fs`-in-src/test footprint intact.
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json");

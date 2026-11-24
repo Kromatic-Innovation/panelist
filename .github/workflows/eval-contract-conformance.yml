@@ -35,7 +35,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          node-version: 22
 
       # Same 1password/load-secrets-action + OP_SERVICE_ACCOUNT_TOKEN pattern
       # as .github/workflows/promote-main.yml — mirrored in shape. Maintainer
