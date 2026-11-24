@@ -98,3 +98,10 @@ test("present and empty on a clean run; present on built-in and custom fallback 
   });
   assert.equal(custom.failureSample[0].reason, "down");
 });
+
+test("an adapter resolving to a bare primitive is a transport failure, not a crash (panelist#249)", async () => {
+  const prim = { model: "m-prim", complete: async () => "just a string" };
+  const res = await score(cand, [{ id: "p1" }], RUBRIC, { ...D, panel: [ok("m-ok"), prim] });
+  assert.equal(res.failuresByCause.transport, 1);
+  assert.deepEqual(res.failureSample, [{ persona: "p1", model: "m-prim", cause: "transport", reason: "no usable text" }]);
+});

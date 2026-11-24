@@ -6,8 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Pre-1.0 (0.x) semantics apply.** While panelist is at a `0.x` major version,
-MINOR releases (`0.x.0`) may include breaking changes, and PATCH releases
-(`0.0.x`) are reserved for backwards-compatible fixes. Once the project
+MINOR releases (`0.x.0`) are for breaking or behaviour-changing releases, and
+PATCH releases (`0.x.y`) are reserved for backwards-compatible fixes. Once the project
 reaches `1.0.0`, standard semver discipline (breaking changes only on MAJOR)
 takes over.
 
@@ -24,6 +24,12 @@ minor version.
 instead of `0` (see **Breaking** below).
 
 ### Breaking
+
+- **`spawn()` / `runPersona()` `dealKillers` may now be `null`
+  ([#248](https://github.com/Kromatic-Innovation/panelist/issues/248)).**
+  When the reply does not parse as a JSON object, `dealKillers` is `null`
+  instead of `[]`. Callers doing `result.dealKillers.length` must check
+  `result.parseOk` (or null-guard) first.
 
 - **Node.js 22 or newer is required
   ([#241](https://github.com/Kromatic-Innovation/panelist/issues/241)).**
@@ -99,6 +105,15 @@ instead of `0` (see **Breaking** below).
   counted as a reporting panelist toward quorum. Blank strings now parse as
   missing, and a reply with no parseable axis is an `unparsable` failure.
 
+- **`spawn` no longer hides parse failures
+  ([#248](https://github.com/Kromatic-Innovation/panelist/issues/248)).**
+  A truncated or non-JSON reply used to return `dealKillers: []`, which read as
+  "no objections". Every spawn envelope now carries `parseOk: boolean` and
+  `failuresByCause` (the same `{ transport, unparsable }` shape `score()` uses;
+  `unparsable: 1` on a parse failure). On a parse failure `dealKillers` is
+  `null` (shape change: consumers must handle `null`) and `message` stays the
+  raw trimmed reply text. Transport failures still throw.
+
 - **Object-form rubric axis descriptions now reach the model prompt
   ([#234](https://github.com/Kromatic-Innovation/panelist/issues/234)).**
   `axes: { clarity: "..." }` descriptions were dropped because the rubric was
@@ -166,6 +181,15 @@ instead of `0` (see **Breaking** below).
 
 ### Docs
 
+- **Tool-isolation wording corrected, and a 0.4.2 semver note
+  ([#243](https://github.com/Kromatic-Innovation/panelist/issues/243)).**
+  The README and `docs/invocation-contract.md` no longer claim isolation is
+  "by construction": panelist resolves a deny-by-default allowlist, forwards
+  it to the adapter, and reports it (`isolation.tools`, `isolation.denied`),
+  and the adapter is responsible for enforcing it. The `0.4.2` entry now
+  notes that its verdict change should have been a minor release, and the 0.x
+  scheme description above no longer mislabels patch releases as `0.0.x`.
+
 - **Breaking-change protocol for releases
   ([#233](https://github.com/Kromatic-Innovation/panelist/issues/233)).**
   `CONTRIBUTING.md`'s release steps now require a `### Breaking` section in
@@ -190,6 +214,12 @@ returned `"cut"` and is unaffected, and panels that report at least one
 panelist are unaffected. The change is fail-closed by design, the same
 posture `0.4.0` gave the built-in fallback and `0.4.1` gave partial quorum
 attrition — see **Fixed**.
+
+**Semver note.** The total-outage verdict change
+([#176](https://github.com/Kromatic-Innovation/panelist/issues/176)) was
+behaviour-changing for callers with a custom `deps.fallback`. Under the 0.x
+policy above it should have shipped as a minor release (`0.5.0`), not a patch.
+The `0.4.2` tag is left as published.
 
 ### Fixed
 

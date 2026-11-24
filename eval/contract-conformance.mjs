@@ -144,6 +144,10 @@ async function runSingleTurnCell(client) {
   if (typeof out.message !== "string" || !out.message.trim()) {
     return { pass: false, reason: "message is empty/non-string" };
   }
+  // panelist#248: an unparsable reply now reports parseOk:false and dealKillers:null.
+  if (out.parseOk !== true) {
+    return { pass: false, reason: "reply did not parse as a JSON object (parseOk: false)" };
+  }
   if (!Array.isArray(out.dealKillers)) {
     return { pass: false, reason: "dealKillers is not an array" };
   }
