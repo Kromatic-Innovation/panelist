@@ -80,7 +80,7 @@ export function renderRunnerPrompt(personaId, task = {}, deps = {}) {
  *   @param {{model,complete}} [deps.client]  injected model client (default throws, same as spawn).
  *   @param {object} [deps.toolGate]          share a gate (isolation.mjs createToolGate) across a panel.
  *   @param {function} [deps.buildPrompt]     override buildSpawnPrompt.
- * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] } }>}
+ * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[]|null, parseOk: boolean, failuresByCause: {transport:number, unparsable:number}, isolation: { tools: string[], denied: object[] } }>}
  */
 export async function runPersona(personaId, task = {}, deps = {}) {
   return spawn(personaId, task, deps);
