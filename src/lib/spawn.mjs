@@ -1,7 +1,7 @@
 // spawn.mjs — the persona invocation contract (#1263 slice E).
 //
 //   spawn(personaId, { mode, artifact, instruction, responseSchema?, horizon?, tools?, model? }, deps)
-//     -> { personaId, mode, verdict|null, message, dealKillers[], isolation }
+//     -> { personaId, mode, verdict|null, message, dealKillers[]|null, parseOk, failuresByCause, isolation }
 //
 // One persona, one turn, one wrapper. This is the FOUNDATIONAL single-turn
 // contract; the richer agentic/converse plane (multi-turn dialogue, tool use) is
@@ -15,8 +15,11 @@
 // Invariants:
 //   - `message`     is ALWAYS free text (the persona's own words).
 //   - `verdict`     is non-null ONLY when responseSchema was supplied.
-//   - `dealKillers` is ALWAYS an array (possibly empty) — a persona may always
-//     surface blocking objections regardless of mode. (Full honesty-guardrail
+//   - `dealKillers` is an array (possibly empty) when the reply parsed, and
+//     `null` when it did not (panelist#248) — an unparsable/truncated reply must
+//     not look like "no objections". `parseOk` says which; `failuresByCause`
+//     is score()'s shape ({ transport, unparsable }). On parse failure `message`
+//     is the raw trimmed reply text (for humans), not a parsed field. (Full honesty-guardrail
 //     auto-stamping is panelist#6; this just keeps the wrapper caveat-capable.)
 //   - `isolation`   is ALWAYS present (panelist#72): { tools, denied }. `tools`
 //     defaults to `[]` — spawn grants NO tools unless opts.tools names them
@@ -158,7 +161,7 @@ function normalizeDealKillers(v) {
  *     instead of spawn building its own from opts.tools.
  *   @param {number} [deps.maxTokens]         override DEFAULT_MAX_TOKENS (panelist#85).
  *   @param {number} [deps.temperature]       override DEFAULT_TEMPERATURE (panelist#85).
- * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] }, honesty: string }>}
+ * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[]|null, parseOk: boolean, failuresByCause: {transport:number, unparsable:number}, isolation: { tools: string[], denied: object[] }, honesty: string }>}
  */
 export async function spawn(personaId, opts = {}, deps = {}) {
   const { mode, artifact, instruction, responseSchema, horizon, tools, model } = opts;
@@ -204,11 +207,19 @@ export async function spawn(personaId, opts = {}, deps = {}) {
     throw new Error(`panelist spawn: client returned no usable text for ${JSON.stringify(personaId)}`);
   }
 
-  const parsed = extractJsonObject(res.text) || {};
+  // Parse status (panelist#248): "parsed" means extractJsonObject returned a
+  // non-null object — nothing stricter (no schema validation). A failure must
+  // never read as a clean pass, so dealKillers is null (not []) when it fails.
+  const extracted = extractJsonObject(res.text);
+  const parseOk = extracted != null && typeof extracted === "object";
+  const parsed = parseOk ? extracted : {};
   const message =
     typeof parsed.message === "string" && parsed.message.trim() ? parsed.message.trim() : res.text.trim();
   const verdict = responseSchema != null && "verdict" in parsed ? parsed.verdict : null;
-  const dealKillers = normalizeDealKillers(parsed.dealKillers);
+  const dealKillers = parseOk ? normalizeDealKillers(parsed.dealKillers) : null;
+  // Same shape and cause names as score()'s failuresByCause (transport failures
+  // still throw above, so only `unparsable` can be non-zero here).
+  const failuresByCause = { transport: 0, unparsable: parseOk ? 0 : 1 };
 
   // Merge the gate's own denials (recorded by gate.check() calls, if the
   // adapter used it) with any the adapter self-reports via res.deniedToolCalls
@@ -220,5 +231,5 @@ export async function spawn(personaId, opts = {}, deps = {}) {
   // Auto-stamp the honesty caveat on the returned envelope (panelist#81,
   // PAN-01) — spawn is the foundational single-turn contract, and runPersona
   // (runner.mjs) delegates to it unmodified, so this covers both surfaces.
-  return stampHonesty({ personaId, mode, verdict, message, dealKillers, isolation });
+  return stampHonesty({ personaId, mode, verdict, message, dealKillers, parseOk, failuresByCause, isolation });
 }

@@ -24,6 +24,12 @@ minor version.
 
 ### Breaking
 
+- **`spawn()` / `runPersona()` `dealKillers` may now be `null`
+  ([#248](https://github.com/Kromatic-Innovation/panelist/issues/248)).**
+  When the reply does not parse as a JSON object, `dealKillers` is `null`
+  instead of `[]`. Callers doing `result.dealKillers.length` must check
+  `result.parseOk` (or null-guard) first.
+
 - **Node.js 22 or newer is required
   ([#241](https://github.com/Kromatic-Innovation/panelist/issues/241)).**
   `engines.node` is now `>=22` (was `>=20`; Node 20 reached end of life on
@@ -42,6 +48,15 @@ minor version.
   explicitly supplied `killAxes` is validated; the default (`[]`) is unchanged.
 
 ### Fixed
+
+- **`spawn` no longer hides parse failures
+  ([#248](https://github.com/Kromatic-Innovation/panelist/issues/248)).**
+  A truncated or non-JSON reply used to return `dealKillers: []`, which read as
+  "no objections". Every spawn envelope now carries `parseOk: boolean` and
+  `failuresByCause` (the same `{ transport, unparsable }` shape `score()` uses;
+  `unparsable: 1` on a parse failure). On a parse failure `dealKillers` is
+  `null` (shape change: consumers must handle `null`) and `message` stays the
+  raw trimmed reply text. Transport failures still throw.
 
 - **Object-form rubric axis descriptions now reach the model prompt
   ([#234](https://github.com/Kromatic-Innovation/panelist/issues/234)).**

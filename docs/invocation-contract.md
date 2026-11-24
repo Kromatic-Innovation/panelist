@@ -86,8 +86,17 @@ always overrides the source-level one.
 Every call, in every mode, returns exactly this shape:
 
 ```js
-{ personaId, mode, verdict: object | null, message: string, dealKillers: string[], isolation: { tools: string[], denied: object[] }, honesty: string }
+{ personaId, mode, verdict: object | null, message: string, dealKillers: string[] | null, parseOk: boolean, failuresByCause: { transport: number, unparsable: number }, isolation: { tools: string[], denied: object[] }, honesty: string }
 ```
+
+`parseOk` is `true` when the model's reply parsed as a JSON object (nothing
+stricter — a `responseSchema` is not validated). When it is `false` (a
+truncated or non-JSON reply), `dealKillers` is `null` — **not** `[]`, so a
+parse failure can never read as "no objections" — `verdict` is `null`, and
+`message` is the raw trimmed reply text (useful to a human, not a parsed
+field). `failuresByCause` uses the same shape as `score()`: `{ transport: 0,
+unparsable: 1 }` on a parse failure, zeros otherwise. Transport failures
+(client error, no usable text) still throw rather than returning an envelope.
 
 There is one wrapper, not one-per-mode. `spawn.mjs` builds it the same way
 regardless of `mode` — mode only changes the instruction text handed to the
@@ -354,11 +363,11 @@ const result = await spawn(
 - `verdict` is non-`null` **iff** `responseSchema` was supplied to `spawn`.
   Mode alone never turns it on — `vote` without a schema still returns
   `verdict: null`.
-- `dealKillers` is **always** an array (possibly empty), in every mode. A
-  persona may surface a blocking objection whether it's voting, commenting,
-  or conversing.
+- `dealKillers` is an array (possibly empty) in every mode whenever
+  `parseOk` is `true`, and `null` when `parseOk` is `false`. A persona may
+  surface a blocking objection whether it's voting, commenting, or conversing.
 - The wrapper shape (`personaId`, `mode`, `verdict`, `message`, `dealKillers`,
-  `isolation`) never changes across modes or across whether a schema was
+  `parseOk`, `failuresByCause`, `isolation`) never changes across modes or across whether a schema was
   supplied — only the values inside it do.
 - `isolation.tools` is **always** the exact effective allowlist (`[]` by
   default); `isolation.denied` is **always** an array (possibly empty) of
