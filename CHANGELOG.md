@@ -6,8 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Pre-1.0 (0.x) semantics apply.** While panelist is at a `0.x` major version,
-MINOR releases (`0.x.0`) may include breaking changes, and PATCH releases
-(`0.0.x`) are reserved for backwards-compatible fixes. Once the project
+MINOR releases (`0.x.0`) are for breaking or behaviour-changing releases, and
+PATCH releases (`0.x.y`) are reserved for backwards-compatible fixes. Once the project
 reaches `1.0.0`, standard semver discipline (breaking changes only on MAJOR)
 takes over.
 
@@ -103,6 +103,15 @@ minor version.
 
 ### Docs
 
+- **Tool-isolation wording corrected, and a 0.4.2 semver note
+  ([#243](https://github.com/Kromatic-Innovation/panelist/issues/243)).**
+  The README and `docs/invocation-contract.md` no longer claim isolation is
+  "by construction": panelist resolves a deny-by-default allowlist, forwards
+  it to the adapter, and reports it (`isolation.tools`, `isolation.denied`),
+  and the adapter is responsible for enforcing it. The `0.4.2` entry now
+  notes that its verdict change should have been a minor release, and the 0.x
+  scheme description above no longer mislabels patch releases as `0.0.x`.
+
 - **Breaking-change protocol for releases
   ([#233](https://github.com/Kromatic-Innovation/panelist/issues/233)).**
   `CONTRIBUTING.md`'s release steps now require a `### Breaking` section in
@@ -127,6 +136,12 @@ returned `"cut"` and is unaffected, and panels that report at least one
 panelist are unaffected. The change is fail-closed by design, the same
 posture `0.4.0` gave the built-in fallback and `0.4.1` gave partial quorum
 attrition — see **Fixed**.
+
+**Semver note.** The total-outage verdict change
+([#176](https://github.com/Kromatic-Innovation/panelist/issues/176)) was
+behaviour-changing for callers with a custom `deps.fallback`. Under the 0.x
+policy above it should have shipped as a minor release (`0.5.0`), not a patch.
+The `0.4.2` tag is left as published.
 
 ### Fixed
 
