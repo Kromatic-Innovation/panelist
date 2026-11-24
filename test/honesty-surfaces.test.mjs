@@ -67,14 +67,14 @@ const SURFACES = [
     name: "score()/scoreCandidate() — default path (already stamped, panelist#6)",
     run: async () => {
       const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
-      return score(cand, reviewPack.slice(0, 2), RUBRIC, { panel });
+      return score(cand, reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel });
     },
   },
   {
     name: "score() — built-in neutralFallback on whole-panel failure (already stamped, panelist#6)",
     run: async () => {
       const panel = [deadClient("claude-x"), deadClient("gpt-y")];
-      return score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+      return score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
     },
   },
   {
@@ -93,14 +93,14 @@ const SURFACES = [
         // Deliberately NO honesty field — the caller's callback replaces
         // neutralFallback wholesale; the call site must stamp it.
       });
-      return score(cand, reviewPack.slice(0, 1), RUBRIC, { panel, fallback: customFallback });
+      return score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, fallback: customFallback });
     },
   },
   {
     name: "rankCandidatesWith() — the returned { shortlist, cut } wrapper",
     run: async () => {
       const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
-      return rankCandidatesWith([cand], reviewPack.slice(0, 2), RUBRIC, { panel });
+      return rankCandidatesWith([cand], reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel });
     },
   },
   {

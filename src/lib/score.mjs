@@ -189,7 +189,10 @@ export function normalizeRubric(rubric = {}) {
   // the default rather than throwing, consistent with every other field here.
   const quorum =
     Number.isFinite(r.quorum) && r.quorum >= 0 && r.quorum <= 1 ? r.quorum : DEFAULT_QUORUM;
-  return { axes, killAxes, killFloor, cut_threshold, quorum, axisDescriptions };
+  // requireEveryPersona (panelist#245): opt-in. When true, a persona with zero
+  // successful calls forces the verdict to "cut". Non-boolean -> false.
+  const requireEveryPersona = r.requireEveryPersona === true;
+  return { axes, killAxes, killFloor, cut_threshold, quorum, requireEveryPersona, axisDescriptions };
 }
 
 // ── Default prompt construction (overridable via deps.buildPrompt) ────────────
@@ -285,7 +288,9 @@ export function buildEvalPrompt({ persona, candidate, rubric, intro }) {
 // ── Robust JSON parsing ──────────────────────────────────────────────────────
 
 function clampScore(v) {
-  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  // A blank / whitespace-only string is MISSING, not 0: Number("") is 0
+  // (panelist#247). Fraction formats such as "7/10" stay NaN -> missing.
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
   if (!Number.isFinite(n)) return null;
   if (n < 0) return 0;
   if (n > 10) return 10;
@@ -404,6 +409,17 @@ function spansMultipleProviders(modelIds) {
 
 // ── Core scoring ─────────────────────────────────────────────────────────────
 
+// RETRY defaults (panelist#246): 2 retries = up to 3 attempts per failing cell,
+// exponential backoff 200ms, 400ms. Invalid deps values fall back to these.
+const DEFAULT_RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 200;
+function normalizeRetries(v) {
+  return Number.isInteger(v) && v >= 0 ? v : DEFAULT_RETRIES;
+}
+function normalizeRetryDelayMs(v) {
+  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_RETRY_DELAY_MS;
+}
+
 /**
  * Score a candidate across a cross-model persona panel against a rubric.
  *
@@ -417,6 +433,8 @@ function spansMultipleProviders(modelIds) {
  *   @param {function} [deps.fallback]             whole-panel-failure fallback.
  *   @param {number}   [deps.concurrency]
  *   @param {function} [deps.limiter]
+ *   @param {number}   [deps.retries]       extra attempts per failed cell (default 2; panelist#246).
+ *   @param {number}   [deps.retryDelayMs]  base backoff, doubled per retry (default 200; panelist#246).
  *   @param {number}   [deps.maxTokens]     override SCORE_MAX_TOKENS (panelist#85).
  *   @param {number}   [deps.temperature]   override DEFAULT_TEMPERATURE (panelist#85). A panel
  *     entry's own `temperature` (declared as a property on the entry itself, panelist#144) takes
@@ -463,19 +481,51 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   // run-level default for that entry only — checked via `in`, not `??`, so an
   // entry can deliberately set `temperature: undefined` to suppress the field
   // entirely rather than inherit the run default.
-  const settled = await Promise.all(
-    tasks.map((t) =>
-      run(async () => {
-        try {
-          const taskMaxTokens = "maxTokens" in t.panelist ? t.panelist.maxTokens : maxTokens;
-          const taskTemperature = "temperature" in t.panelist ? t.panelist.temperature : temperature;
-          return await t.panelist.complete({ prompt: t.prompt, maxTokens: taskMaxTokens, temperature: taskTemperature, tools: gate.tools });
-        } catch {
-          return { ok: false, reason: "threw" };
+  // RETRIES (panelist#246). Each persona x model cell gets up to `retries + 1`
+  // attempts; a cell is retried on a transport failure (throw, ok !== true,
+  // non-string text) AND on an unparsable reply. EVERY attempt goes through
+  // `run()` separately and the backoff sleep happens OUTSIDE it, so a waiting
+  // cell never holds a limiter slot and concurrency stays bounded.
+  const retries = normalizeRetries(deps.retries);
+  const retryDelayMs = normalizeRetryDelayMs(deps.retryDelayMs);
+  let attempts = 0;
+  const attemptCell = (t) =>
+    run(async () => {
+      attempts++;
+      try {
+        const taskMaxTokens = "maxTokens" in t.panelist ? t.panelist.maxTokens : maxTokens;
+        const taskTemperature = "temperature" in t.panelist ? t.panelist.temperature : temperature;
+        return await t.panelist.complete({ prompt: t.prompt, maxTokens: taskMaxTokens, temperature: taskTemperature, tools: gate.tools });
+      } catch {
+        return { ok: false, reason: "threw" };
+      }
+    });
+  const runCell = async (t) => {
+    let out;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (attempt > 0 && retryDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * 2 ** (attempt - 1)));
+      }
+      const res = await attemptCell(t);
+      // Merge the gate's own denials (recorded by gate.check() calls, if the
+      // adapter used it) with any the adapter self-reports via res.deniedToolCalls
+      // — an adapter that enforces upstream of panelist still gets denials surfaced.
+      if (res && res.ok === true && typeof res.text === "string") {
+        const reported = Array.isArray(res.deniedToolCalls) ? res.deniedToolCalls : [];
+        for (const entry of reported) {
+          const denial = normalizeReportedDenial(entry, t.persona.id || t.persona.name || "persona");
+          if (denial) reportedDenied.push(denial);
         }
-      }),
-    ),
-  );
+        const score = extractScore(res.text, norm.axes);
+        out = score ? { res, score } : { res, cause: "unparsable" };
+      } else {
+        out = { res, cause: "transport" };
+      }
+      if (!out.cause) break;
+    }
+    return out;
+  };
+  const settled = await Promise.all(tasks.map(runCell));
 
   // failuresByCause (panelist#85, PAN-16) splits WHY a panelist didn't report a
   // score: "transport" is a client/network-level failure (no usable res.text at
@@ -489,24 +539,10 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   for (let i = 0; i < tasks.length; i++) {
     const { persona, panelist } = tasks[i];
     const modelId = panelist.model || "unknown";
-    const res = settled[i];
-    if (!res || res.ok !== true || typeof res.text !== "string") {
+    const { res, score, cause } = settled[i];
+    if (cause) {
       panelistsFailed++;
-      failuresByCause.transport++;
-      continue;
-    }
-    // Merge the gate's own denials (recorded by gate.check() calls, if the
-    // adapter used it) with any the adapter self-reports via res.deniedToolCalls
-    // — an adapter that enforces upstream of panelist still gets denials surfaced.
-    const reported = Array.isArray(res.deniedToolCalls) ? res.deniedToolCalls : [];
-    for (const entry of reported) {
-      const denial = normalizeReportedDenial(entry, persona.id || persona.name || "persona");
-      if (denial) reportedDenied.push(denial);
-    }
-    const score = extractScore(res.text, norm.axes);
-    if (!score) {
-      panelistsFailed++;
-      failuresByCause.unparsable++;
+      failuresByCause[cause]++;
       continue;
     }
     const overall = axisMean(score, norm.axes);
@@ -522,6 +558,12 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     if (!modelRows.has(key)) modelRows.set(key, []);
     modelRows.get(key).push(overall);
   }
+
+  // personasMissing (panelist#245): persona ids (same id form as
+  // byPersona[].persona) with zero successful calls, in input order.
+  const personaId = (p) => p.id || p.name || "persona";
+  const reportedIds = new Set(byPersona.map((r) => r.persona));
+  const personasMissing = [...new Set(people.map(personaId))].filter((id) => !reportedIds.has(id));
 
   if (byPersona.length === 0) {
     const fb = deps.fallback || neutralFallback;
@@ -549,16 +591,28 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
       {
         ...raw,
         verdict: FALLBACK_VERDICT,
+        // Stamped here so a custom deps.fallback can't omit or falsify them
+        // (panelist#245): on total outage every persona is missing.
+        personasMissing,
+        verdictReason: "total-outage",
+        // Completeness (panelist#246), stamped for the same reason.
+        complete: false,
+        incompleteReason: "total-outage",
+        attempts,
         aggregate: {
           ...(raw && raw.aggregate),
           overall: Number.isFinite(raw?.aggregate?.overall) ? raw.aggregate.overall : 0,
         },
+        // Stamped from the raw aggregate (panelist#247) so it is always present.
+        axesMissing: norm.axes.filter((a) => !Number.isFinite(raw?.aggregate?.[a])),
       },
       USAGE_HEADER,
     );
   }
 
   const aggregate = aggregateAxes(byPersona, norm.axes);
+  // axesMissing (panelist#247): axes with no value in any reply.
+  const axesMissing = norm.axes.filter((a) => !Number.isFinite(aggregate[a]));
   const byModel = {};
   for (const [model, overalls] of modelRows) byModel[model] = round2(mean(overalls));
 
@@ -571,12 +625,41 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   // exactly as before.
   const required = quorumRequired(tasks.length, norm.quorum);
   const quorumMet = byPersona.length >= required;
+  // Precedence: below-quorum > persona-missing > score (total-outage returned
+  // above). The persona-missing override lives here, not in decideVerdict.
+  const forcePersonaCut = quorumMet && norm.requireEveryPersona && personasMissing.length > 0;
+  const verdictReason = !quorumMet ? "below-quorum" : forcePersonaCut ? "persona-missing" : "score";
+
+  // Completeness (panelist#246), computed AFTER retries are exhausted. This is
+  // reporting only; the verdict rules above are unchanged.
+  const incompleteReason = !quorumMet
+    ? "below-quorum"
+    : panelistsFailed > 0 || personasMissing.length > 0
+      ? "partial"
+      : null;
 
   return {
     candidate: cand,
     scores: { byPersona, byModel },
     aggregate,
-    verdict: quorumMet ? decideVerdict(aggregate, norm) : FALLBACK_VERDICT,
+    // axesMissing (panelist#247): axes aggregated to null ([] when none).
+    axesMissing,
+    verdict: !quorumMet
+      ? FALLBACK_VERDICT
+      : forcePersonaCut
+        ? "cut"
+        : decideVerdict(aggregate, norm),
+    // verdictReason (panelist#245): why the verdict is what it is.
+    verdictReason,
+    // complete / incompleteReason (panelist#246): false when any cell still
+    // failed after retries; incompleteReason says how badly. A "below-quorum"
+    // or "total-outage" cut is an outage artefact, not a judgment of the candidate.
+    complete: incompleteReason === null,
+    incompleteReason,
+    // attempts: total adapter calls made (first tries + retries).
+    attempts,
+    // personasMissing: persona ids with zero successful calls ([] when all reported).
+    personasMissing,
     // quorum: the panel-attrition envelope behind the verdict above. `met:false`
     // means the verdict was pinned closed, not derived.
     quorum: {
@@ -623,9 +706,12 @@ function aggregateAxes(byPersona, axes) {
   const agg = {};
   for (const axis of axes) {
     const vals = byPersona.map((r) => r[axis]).filter((v) => v !== null && v !== undefined);
-    agg[axis] = vals.length ? round2(mean(vals)) : 0;
+    // An axis with no values is MISSING (null), not a genuine 0 (panelist#247).
+    agg[axis] = vals.length ? round2(mean(vals)) : null;
   }
-  agg.overall = round2(mean(axes.map((a) => agg[a])));
+  // overall = mean of the non-null axes; stays finite (0 only if every axis is
+  // missing, which cannot happen while byPersona is non-empty).
+  agg.overall = round2(mean(axes.map((a) => agg[a]).filter((v) => v !== null)));
   return agg;
 }
 
@@ -666,6 +752,7 @@ function neutralFallback(candidate, panelistsFailed, rubric, shape = {}) {
     candidate,
     scores: { byPersona: [row], byModel: { "heuristic:fallback": aggregate.overall } },
     aggregate,
+    axesMissing: [],
     // Pinned to FALLBACK_VERDICT, NOT derived from the neutral scores: a total
     // panel failure must never surface a passing verdict to a programmatic gate
     // (panelist#80). The neutral 5s are still reported for human context; the
