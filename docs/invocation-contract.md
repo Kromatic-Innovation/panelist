@@ -96,8 +96,11 @@ model and whether the prompt asks for a `verdict` field at all.
 ## Tool isolation (panelist#72)
 
 A persona's isolation from ambient tools (an MCP memory server, web search,
-filesystem search) is enforced by construction, not by prompt instruction
-alone:
+filesystem search) is governed by a deny-by-default allowlist that panelist resolves, forwards
+to the injected adapter, and reports. **The adapter is responsible for
+enforcing the forwarded allowlist** (refusing or not exposing any tool it
+does not name); panelist bundles no provider layer and cannot itself stop an
+adapter from reaching a tool:
 
 - **Deny by default.** `spawn`/`runPersona` grant **no tools** unless
   `opts.tools` names them explicitly, e.g. `{ tools: ["web"] }`.
@@ -107,7 +110,7 @@ alone:
   itself a tool, and can only be granted by naming it explicitly like any
   other — never bundled in via a wildcard.
 - **The effective set is always reported.** `isolation.tools` in the returned
-  envelope is the exact granted allowlist (`[]` means fully isolated).
+  envelope is the exact granted allowlist (`[]` means no tool was granted; whether the persona was actually isolated depends on the adapter enforcing it).
 - **Denied attempts are reported, not swallowed.** If the injected adapter
   consults the gate (`deps.toolGate`, or the one `spawn` builds internally)
   before dispatching a tool call, or self-reports via
