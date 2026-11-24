@@ -550,3 +550,17 @@ test("rankCandidatesWith: a below-quorum candidate lands in cut (not neither lis
   assert.equal(midEntry.evaluation.verdict, "keep");
   assert.ok(highEntry.rank < midEntry.rank, "the higher-scoring candidate ranks first");
 });
+
+test("score() throws on an unknown kill axis (panelist#244)", async () => {
+  const panel = [fixedScorer("claude-x", GOOD)];
+  await assert.rejects(
+    () => score(cand, reviewPack.slice(0, 1), { ...RUBRIC, killAxes: ["clarty"] }, { panel }),
+    /clarty/,
+  );
+});
+
+test("a valid kill axis below killFloor cuts; exactly at killFloor does not (panelist#244)", () => {
+  const rubric = { axes: ["a", "b"], killAxes: ["a"], killFloor: 4, cut_threshold: 1 };
+  assert.equal(decideVerdict({ a: 3.99, b: 9, overall: 6 }, rubric), "cut");
+  assert.equal(decideVerdict({ a: 4, b: 9, overall: 6.5 }, rubric), "keep");
+});

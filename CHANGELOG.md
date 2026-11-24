@@ -19,6 +19,21 @@ minor version.
 
 ## [Unreleased]
 
+**Breaking.** Rubrics with an unknown `killAxes` entry now throw (see
+**Breaking** below).
+
+### Breaking
+
+- **A `killAxes` entry that is not in `axes` now throws
+  ([#244](https://github.com/Kromatic-Innovation/panelist/issues/244)).**
+  Previously a typo in `killAxes`, or a kill axis missing from `axes`, was
+  silently ignored and the kill never fired. `normalizeRubric` (and therefore
+  `score()`) now throws an error naming the offending entry and the valid
+  axes. This is an exception to the documented "normalization never throws"
+  contract, which `docs/invocation-contract.md` now states explicitly. Callers
+  must fix or remove any `killAxes` entry that does not match an axis. Only an
+  explicitly supplied `killAxes` is validated; the default (`[]`) is unchanged.
+
 ### Docs
 
 - **Breaking-change protocol for releases
