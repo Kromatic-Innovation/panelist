@@ -110,7 +110,7 @@ adapter from reaching a tool:
   itself a tool, and can only be granted by naming it explicitly like any
   other — never bundled in via a wildcard.
 - **The effective set is always reported.** `isolation.tools` in the returned
-  envelope is the exact granted allowlist (`[]` means fully isolated).
+  envelope is the exact granted allowlist (`[]` means no tool was granted; whether the persona was actually isolated depends on the adapter enforcing it).
 - **Denied attempts are reported, not swallowed.** If the injected adapter
   consults the gate (`deps.toolGate`, or the one `spawn` builds internally)
   before dispatching a tool call, or self-reports via
