@@ -38,6 +38,26 @@ import { stampHonesty } from "./honesty.mjs";
 
 // ── Numeric helpers (module-private; score.mjs does not export mean/round2) ─
 
+// Honest-by-construction: only a real finite number counts. Numeric strings ("3") do NOT.
+function isFiniteNumber(v) {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+// A "keyed" side is an array of `{ id, value }` entries or a plain `{ [id]: value }` object.
+// Returns Map<String(id), value>, or null when the side is positional (a plain array of values).
+// Ids are compared as strings, because object keys are always strings (`{ 101: x }`
+// must join `items: [101]` and `{ id: 101 }`).
+function toKeyedMap(side) {
+  if (Array.isArray(side)) {
+    if (side.length > 0 && side.every((e) => e !== null && typeof e === "object" && "id" in e)) {
+      return new Map(side.map((e) => [String(e.id), e.value]));
+    }
+    return null;
+  }
+  if (side !== null && typeof side === "object") return new Map(Object.entries(side));
+  return null;
+}
+
 function mean(arr) {
   if (!arr.length) return 0;
   return arr.reduce((s, v) => s + v, 0) / arr.length;
@@ -73,13 +93,30 @@ function rank(arr) {
 /**
  * Spearman's rank correlation coefficient between two equal-length numeric
  * arrays: rank both, then Pearson correlation on the ranks (average ranks for
- * ties). Returns a number in [-1, 1] rounded to 2dp, or `null` when undefined
- * (unequal/empty lengths, or either array has zero variance).
+ * ties). Pairs where either side is not a finite number (`typeof` number and
+ * finite — null, undefined, NaN, Infinity and numeric strings like "3" are all
+ * skipped) are dropped before ranking. Returns a number in [-1, 1] rounded to
+ * 2dp, or `null` when undefined (unequal/empty lengths, no usable pairs, or
+ * either array has zero variance).
  */
 export function spearmanRankCorrelation(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b)) return null;
+  if (a.length === 0 || a.length !== b.length) return null;
+
+  // Pairwise-skip (panelist#238): a pair where either side is not a finite number
+  // (null, undefined, NaN, Infinity, numeric strings like "3") is dropped, never ranked.
+  const xs = [];
+  const ys = [];
+  for (let i = 0; i < a.length; i++) {
+    if (isFiniteNumber(a[i]) && isFiniteNumber(b[i])) {
+      xs.push(a[i]);
+      ys.push(b[i]);
+    }
+  }
+  a = xs;
+  b = ys;
   const n = a.length;
-  if (n === 0 || n !== b.length) return null;
+  if (n === 0) return null;
 
   const ra = rank(a);
   const rb = rank(b);
@@ -132,16 +169,29 @@ export function keptSetHitRate(keptFlags, realGoodFlags) {
  * signal, and rank personas by predictive usefulness (not by how well they read).
  *
  * @param {object} args
- * @param {Array} args.items                    item ids (published posts), length N.
- * @param {Object<string, number[]>} args.syntheticByPersona
- *   per-persona synthetic score per item, aligned to `items`; higher = liked/kept more.
- * @param {number[]} args.realSignal             injected real downstream engagement per
- *   item, aligned to `items`. What it measures (opens/scroll/forwards/conversions) is
- *   D6 — the caller's runtime choice, not this module's.
- * @param {number} [args.keepThreshold]          per-persona: default is that persona's
- *   own median synthetic score; at/above = persona "keeps" the item.
- * @param {number} [args.goodThreshold]          default is the median of realSignal;
- *   at/above = the item actually performed well.
+ * @param {Array} args.items                    item ids (published posts).
+ * @param {Object<string, number[]|object[]|object>} args.syntheticByPersona
+ *   per-persona synthetic score per item; higher = liked/kept more. Either positional
+ *   (an array aligned to `items`) or keyed by id (an array of `{ id, value }` entries, or
+ *   an `{ [id]: value }` object).
+ * @param {number[]|object[]|object} args.realSignal  injected real downstream engagement per
+ *   item, positional or keyed exactly like the synthetic scores. What it measures
+ *   (opens/scroll/forwards/conversions) is D6 — the caller's runtime choice, not this module's.
+ *
+ * Matching (panelist#238): when EITHER side is keyed by id, the two are joined by id over
+ * `items` (or, when `items` is empty, over the keyed real signal's ids); a positional side is
+ * read as `items[i] -> value`, so a keyed side needs `items` to join a positional one. An id
+ * missing on either side drops that pair. With no ids at all, sides are matched by position.
+ * In every mode a pair where either value is not a finite number (null, undefined, NaN,
+ * Infinity, and numeric strings such as "3" — `typeof` must be "number") is SKIPPED, not
+ * rejected. Each leaderboard row's `n` is the number of pairs actually used; when no
+ * correlation can be computed (positional length mismatch, or ids that cannot be joined)
+ * it is 0 and `spearman`/`keptSetHitRate` are null. The top-level `n` is the largest
+ * per-persona `n`.
+ * @param {number} [args.keepThreshold]          per-persona: default is the median of that
+ *   persona's usable synthetic scores; at/above = persona "keeps" the item.
+ * @param {number} [args.goodThreshold]          default is the median of the usable real
+ *   values; at/above = the item actually performed well.
  * @returns {{ leaderboard: object[], n: number, note: string }}
  */
 export function calibratePersonas({
@@ -152,25 +202,67 @@ export function calibratePersonas({
   goodThreshold,
 } = {}) {
   const ids = Array.isArray(items) ? items : [];
-  const n = ids.length;
-  const real = Array.isArray(realSignal) ? realSignal : [];
   const byPersona = syntheticByPersona && typeof syntheticByPersona === "object" ? syntheticByPersona : {};
-
-  const good = Number.isFinite(goodThreshold) ? goodThreshold : median(real.length ? real : [0]);
-  const realGoodFlags = real.map((v) => v >= good);
+  const realMap = toKeyedMap(realSignal);
 
   const leaderboard = Object.keys(byPersona).map((personaId) => {
-    const scores = Array.isArray(byPersona[personaId]) ? byPersona[personaId] : [];
-    const itemCount = Math.min(n, scores.length, real.length);
+    const side = byPersona[personaId];
+    const scoreMap = toKeyedMap(side);
+    let xs = []; // synthetic, usable pairs
+    let ys = []; // real, usable pairs
+    let joinable = true;
 
-    const keep = Number.isFinite(keepThreshold) ? keepThreshold : median(scores.length ? scores : [0]);
-    const keptFlags = scores.map((v) => v >= keep);
+    if (realMap || scoreMap) {
+      // Id join.
+      const lookup = (map, positional) => {
+        if (map) return (id) => map.get(String(id));
+        const m = new Map();
+        if (Array.isArray(positional)) ids.forEach((id, i) => m.set(String(id), positional[i]));
+        return (id) => m.get(String(id));
+      };
+      const universe = ids.length ? ids : [...(realMap ?? scoreMap).keys()];
+      if ((!realMap || !scoreMap) && !ids.length) joinable = false; // positional side has no ids to join on
+      const getS = lookup(scoreMap, side);
+      const getR = lookup(realMap, realSignal);
+      if (joinable) {
+        for (const id of universe) {
+          const x = getS(id);
+          const y = getR(id);
+          if (isFiniteNumber(x) && isFiniteNumber(y)) {
+            xs.push(x);
+            ys.push(y);
+          }
+        }
+      }
+    } else {
+      // Positional join: lengths must agree, otherwise nothing is computed.
+      const sc = Array.isArray(side) ? side : [];
+      const rl = Array.isArray(realSignal) ? realSignal : [];
+      if (sc.length === rl.length) {
+        for (let i = 0; i < sc.length; i++) {
+          if (isFiniteNumber(sc[i]) && isFiniteNumber(rl[i])) {
+            xs.push(sc[i]);
+            ys.push(rl[i]);
+          }
+        }
+      }
+    }
 
-    const spearman = spearmanRankCorrelation(scores, real);
+    if (!joinable || xs.length === 0) {
+      return { personaId, spearman: null, keptSetHitRate: null, n: 0 };
+    }
+
+    const good = Number.isFinite(goodThreshold) ? goodThreshold : median(ys);
+    const keep = Number.isFinite(keepThreshold) ? keepThreshold : median(xs);
+    const keptFlags = xs.map((v) => v >= keep);
+    const realGoodFlags = ys.map((v) => v >= good);
+
+    const spearman = spearmanRankCorrelation(xs, ys);
     const hitRate = keptSetHitRate(keptFlags, realGoodFlags);
 
-    return { personaId, spearman, keptSetHitRate: hitRate, n: itemCount };
+    return { personaId, spearman, keptSetHitRate: hitRate, n: xs.length };
   });
+  const n = leaderboard.reduce((m, r) => Math.max(m, r.n), 0);
 
   // Personas that predict well sort first: rank by spearman desc (null last),
   // tie-broken by keptSetHitRate desc (null last).

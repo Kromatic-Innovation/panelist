@@ -19,8 +19,6 @@ minor version.
 
 ## [Unreleased]
 
-**Breaking.** Node.js 22 or newer is now required (see **Breaking** below).
-
 ### Breaking
 
 - **Node.js 22 or newer is required
@@ -29,6 +27,55 @@ minor version.
   2026-04-30). CI now tests a Node 22 and 24 matrix, and the release workflow
   runs on Node 22. **Upgrade step:** upgrade to Node 22 or newer before
   installing 0.5.0. No API changed.
+
+### Fixed
+
+- **Object-form rubric axis descriptions now reach the model prompt
+  ([#234](https://github.com/Kromatic-Innovation/panelist/issues/234)).**
+  `axes: { clarity: "..." }` descriptions were dropped because the rubric was
+  normalized twice and the second pass, seeing an array of axes, reset
+  `axisDescriptions` to null. `normalizeRubric` is now idempotent and keeps
+  the descriptions, matching `docs/invocation-contract.md`.
+- **`providerOf` no longer treats each unrecognized model as its own provider
+  ([#235](https://github.com/Kromatic-Innovation/panelist/issues/235)).**
+  Unrecognized ids used to fall back to the full id, so single-vendor panels
+  such as `[gpt-4o, o4-mini]` or `[mistral-large, mistral-small]` reported
+  `crossModel: true`. The vendor table now also covers the o-series
+  (anchored), `gemma`, `llama`, `mistral`/`mixtral` and `grok`; an unknown id
+  with a `vendor/` prefix maps to that prefix, and any other maps to
+  `"unknown"`. `crossModel` may now be `false` for panels that previously
+  reported `true`.
+- **The junction engine never terminated when a junction's `cost` was 0,
+  negative or NaN
+  ([#236](https://github.com/Kromatic-Innovation/panelist/issues/236)).**
+  `runJunctionLoop` now accepts only a finite `cost > 0` (omitted still
+  defaults to 1); anything else, including `Infinity`, throws when that
+  junction is reached, before a turn is spent. A new hard turn cap,
+  `opts.maxTurns` (default 1000, `DEFAULT_MAX_TURNS`), ends a walk with the
+  new `stopReason: "max-turns"`. Documented in `docs/junction-contract.md`.
+- **`drift-check.mjs` auto-ran its CLI and called `process.exit()` inside any
+  consumer script that happened to be named `drift-check.mjs`
+  ([#237](https://github.com/Kromatic-Innovation/panelist/issues/237)).**
+  The CLI now runs only when `src/lib/drift-check.mjs` is itself the process
+  entry module (realpath-compared against `process.argv[1]`, which may be
+  absent), so `import { checkRecords } from "panelist"` from a consumer's
+  `scripts/drift-check.mjs` no longer prints panelist's report or exits early.
+  `npm run drift` is unchanged and still exits non-zero on drift. New export:
+  `isEntryModule`; `main()` now accepts optional injected packs.
+
+- **`calibratePersonas` no longer reports confident correlations from missing
+  or non-numeric data
+  ([#238](https://github.com/Kromatic-Innovation/panelist/issues/238)).**
+  `null` was ranked as `0` and `NaN` broke the rank sort, so `[1, null, 3, 4]`
+  gave Spearman 0.8 and `[1, NaN, 3, 4]` gave 1.0. Pairs where either side is
+  not a finite number (`null`, `undefined`, `NaN`, `Infinity`, numeric strings)
+  are now skipped, and each leaderboard row's `n` is the count of pairs
+  actually used. Scores and `realSignal` may now be keyed by id (`{ id, value }`
+  entries or an `{ [id]: value }` object) and are then joined by id instead of
+  position; an id missing on either side drops that pair. A positional length
+  mismatch now reports `n: 0` alongside the `null` correlation. Default keep
+  and good thresholds are the medians of the usable pairs.
+**Breaking.** Node.js 22 or newer is now required (see **Breaking** below).
 
 ### Docs
 
