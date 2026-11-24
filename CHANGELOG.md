@@ -54,6 +54,18 @@ minor version.
   `npm run drift` is unchanged and still exits non-zero on drift. New export:
   `isEntryModule`; `main()` now accepts optional injected packs.
 
+- **`calibratePersonas` no longer reports confident correlations from missing
+  or non-numeric data
+  ([#238](https://github.com/Kromatic-Innovation/panelist/issues/238)).**
+  `null` was ranked as `0` and `NaN` broke the rank sort, so `[1, null, 3, 4]`
+  gave Spearman 0.8 and `[1, NaN, 3, 4]` gave 1.0. Pairs where either side is
+  not a finite number (`null`, `undefined`, `NaN`, `Infinity`, numeric strings)
+  are now skipped, and each leaderboard row's `n` is the count of pairs
+  actually used. Scores and `realSignal` may now be keyed by id (`{ id, value }`
+  entries or an `{ [id]: value }` object) and are then joined by id instead of
+  position; an id missing on either side drops that pair. A positional length
+  mismatch now reports `n: 0` alongside the `null` correlation. Default keep
+  and good thresholds are the medians of the usable pairs.
 ### Docs
 
 - **Breaking-change protocol for releases
