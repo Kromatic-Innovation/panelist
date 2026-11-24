@@ -551,6 +551,37 @@ test("rankCandidatesWith: a below-quorum candidate lands in cut (not neither lis
   assert.ok(highEntry.rank < midEntry.rank, "the higher-scoring candidate ranks first");
 });
 
+test("object-form axis descriptions reach the prompt the adapter receives (panelist#234)", async () => {
+  const rubric = {
+    axes: { clarity: "Is the point obvious on first read?", credibility: "Would you trust the claims?" },
+  };
+  const captured = [];
+  const scores = { clarity: 8, credibility: 8 };
+  const panel = [capturingScorer("claude-x", scores, captured)];
+  await score(cand, reviewPack.slice(0, 1), rubric, { panel });
+  assert.equal(captured.length, 1);
+  assert.ok(captured[0].prompt.includes("Is the point obvious on first read?"));
+  assert.ok(captured[0].prompt.includes("Would you trust the claims?"));
+});
+
+test("crossModel is false for same-vendor and all-unknown panels (panelist#235)", async () => {
+  const pairs = [
+    ["gpt-4o", "o4-mini"],
+    ["mistral-large", "mistral-small"],
+    ["llama-3-8b", "llama-3-70b"],
+    ["gemma-2-2b", "gemma-2-9b"],
+    ["grok-1", "grok-2"],
+    ["mystery-a", "mystery-b"],
+  ];
+  for (const [a, b] of pairs) {
+    const panel = [fixedScorer(a, GOOD), fixedScorer(b, GOOD)];
+    const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel });
+    assert.equal(res.crossModel, false, `${a} + ${b}`);
+  }
+  const mixed = [fixedScorer("mistral-large", GOOD), fixedScorer("gpt-4o", GOOD)];
+  assert.equal((await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: mixed })).crossModel, true);
+});
+
 test("score() throws on an unknown kill axis (panelist#244)", async () => {
   const panel = [fixedScorer("claude-x", GOOD)];
   await assert.rejects(

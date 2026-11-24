@@ -9,3 +9,15 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # v2.6.0 references a container image whose manifest is not pullable
+      # from ghcr.io, so every Scorecard run fails (panelist#239). Pinned back
+      # to v2.5.0; drop this entry once a working 2.6.x is published.
+      - dependency-name: "ossf/scorecard-action"
+        versions: ["2.6.0"]
+    groups:
+      # CodeQL refuses mismatched init/analyze versions, so every
+      # github/codeql-action path must be bumped in one PR (panelist#240).
+      codeql:
+        patterns:
+          - "github/codeql-action*"
