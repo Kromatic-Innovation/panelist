@@ -211,7 +211,8 @@ export async function spawn(personaId, opts = {}, deps = {}) {
   // non-null object — nothing stricter (no schema validation). A failure must
   // never read as a clean pass, so dealKillers is null (not []) when it fails.
   const extracted = extractJsonObject(res.text);
-  const parseOk = extracted != null && typeof extracted === "object";
+  // A top-level JSON array is not the expected object (typeof [] is "object").
+  const parseOk = extracted != null && typeof extracted === "object" && !Array.isArray(extracted);
   const parsed = parseOk ? extracted : {};
   const message =
     typeof parsed.message === "string" && parsed.message.trim() ? parsed.message.trim() : res.text.trim();

@@ -227,3 +227,11 @@ test("parse failures are distinguishable from a clean pass (panelist#248)", asyn
   assert.deepEqual(c.dealKillers, []);
   assert.deepEqual(c.failuresByCause, { transport: 0, unparsable: 0 });
 });
+
+test("a top-level JSON array reply is a parse failure, not a clean pass (panelist#248)", async () => {
+  const client = mockClient("claude-x", () => '["no install command", "no license"]');
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.equal(out.parseOk, false);
+  assert.equal(out.dealKillers, null);
+  assert.deepEqual(out.failuresByCause, { transport: 0, unparsable: 1 });
+});
