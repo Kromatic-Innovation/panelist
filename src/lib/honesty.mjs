@@ -36,9 +36,25 @@ if (!USAGE_HEADER.includes(HONESTY_MARKER)) {
 }
 
 /**
+ * Resolve a (possibly custom) usage string to the text actually stamped
+ * (panelist#242). A custom string never REPLACES the standard caveat: the
+ * custom text comes FIRST, followed by the standard USAGE_HEADER. A string that
+ * already contains HONESTY_MARKER is returned unchanged (no double-stamping);
+ * an empty / non-string value resolves to the standard USAGE_HEADER.
+ * @param {string} [custom]
+ * @returns {string}
+ */
+export function composeUsage(custom) {
+  if (typeof custom !== "string" || !custom) return USAGE_HEADER;
+  if (custom.includes(HONESTY_MARKER)) return custom;
+  return `${custom} ${USAGE_HEADER}`;
+}
+
+/**
  * Return a shallow copy of `envelope` with a single `honesty` field set to
  * `usage` (default: the live register header, falling back to the static
- * default). Idempotent: re-stamping replaces rather than duplicates the
+ * default), composed via composeUsage so a custom string is always followed by
+ * the standard caveat. Idempotent: re-stamping replaces rather than duplicates the
  * field. Never mutates the input.
  * @param {object} envelope
  * @param {string} [usage]
@@ -46,7 +62,7 @@ if (!USAGE_HEADER.includes(HONESTY_MARKER)) {
  */
 export function stampHonesty(envelope, usage) {
   const base = envelope && typeof envelope === "object" ? envelope : {};
-  const honesty = typeof usage === "string" && usage ? usage : getUsage() || USAGE_HEADER;
+  const honesty = composeUsage(typeof usage === "string" && usage ? usage : getUsage());
   return { ...base, honesty };
 }
 
@@ -99,7 +115,7 @@ export function formatPanelSummary(evaluation, opts = {}) {
     }
   }
 
-  const honesty = typeof ev.honesty === "string" && ev.honesty ? ev.honesty : getUsage() || USAGE_HEADER;
+  const honesty = typeof ev.honesty === "string" && ev.honesty ? ev.honesty : composeUsage(getUsage());
   lines.push(honesty);
 
   return lines.join(" ");
