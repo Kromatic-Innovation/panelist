@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runJunctionLoop, BAIL } from "../src/lib/junction.mjs";
+import { DEFAULT_MAX_TURNS } from "../src/lib/junction-constants.mjs";
 import { createToolGate } from "../src/lib/isolation.mjs";
 
 // A scripted persona client: captures every prompt it is handed, and answers with
@@ -361,4 +362,44 @@ test("runJunctionLoop honors an explicit temperature of 0 (nullish coalescing, n
   const client = capturingScriptedClient([{ reaction: "seen enough", decision: BAIL }], captured);
   await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client, temperature: 0 });
   assert.equal(captured[0].temperature, 0);
+});
+
+// panelist#236: a non-positive / non-finite cost never trips the budget gate, so a cyclic
+// graph with a never-bailing reader used to run forever.
+function cycleGraph(cost) {
+  return {
+    entry: "a",
+    junctions: {
+      a: { content: "A", cost, decisions: () => [{ id: "a", label: "again" }] },
+    },
+  };
+}
+
+for (const bad of [0, -1, NaN, Infinity, -Infinity, "2", null]) {
+  test(`invalid junction cost ${String(bad)} on a cyclic graph throws instead of looping`, async () => {
+    const client = { model: "m", async complete() { return { ok: true, text: JSON.stringify({ reaction: "x", decision: "a" }), model: "m" }; } };
+    await assert.rejects(
+      () => runJunctionLoop(cycleGraph(bad), READER, { spawnStrategy: "persistent", client, patienceBudget: 5 }),
+      /invalid cost/,
+    );
+  });
+}
+
+test("maxTurns caps a walk with a distinct stopReason", async () => {
+  let calls = 0;
+  const client = { model: "m", async complete() { calls += 1; return { ok: true, text: JSON.stringify({ reaction: "x", decision: "a" }), model: "m" }; } };
+  const out = await runJunctionLoop(cycleGraph(1), READER, { spawnStrategy: "persistent", client, patienceBudget: 100, maxTurns: 3 });
+  assert.equal(out.stopReason, "max-turns");
+  assert.equal(out.turns, 3);
+  assert.equal(calls, 3);
+  assert.equal(out.trace.dropOff.reason, "hard turn cap reached before finishing");
+});
+
+test("default max-turns cap is 1000 and invalid maxTurns throws", async () => {
+  assert.equal(DEFAULT_MAX_TURNS, 1000);
+  const client = { model: "m", async complete() { return { ok: true, text: JSON.stringify({ reaction: "x", decision: "a" }), model: "m" }; } };
+  const out = await runJunctionLoop(cycleGraph(0.001), READER, { spawnStrategy: "persistent", client, patienceBudget: 1e9 });
+  assert.equal(out.stopReason, "max-turns");
+  assert.equal(out.turns, DEFAULT_MAX_TURNS);
+  await assert.rejects(() => runJunctionLoop(cycleGraph(1), READER, { spawnStrategy: "persistent", client, maxTurns: 0 }), /maxTurns/);
 });

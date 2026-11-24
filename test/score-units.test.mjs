@@ -37,11 +37,40 @@ test("providerOf is case-insensitive", () => {
   assert.equal(providerOf("GPT-4"), "openai");
 });
 
-test("providerOf falls back to the lowercased id, then 'unknown'", () => {
-  assert.equal(providerOf("mistral-large"), "mistral-large");
+test("providerOf covers o-series, gemma, llama, mistral/mixtral, grok (panelist#235)", () => {
+  assert.equal(providerOf("o4-mini"), "openai");
+  assert.equal(providerOf("o1"), "openai");
+  assert.equal(providerOf("azure/o3-mini"), "openai");
+  assert.equal(providerOf("gemma-2-9b"), "google");
+  assert.equal(providerOf("llama-3-70b"), "meta");
+  assert.equal(providerOf("mistral-large"), "mistral");
+  assert.equal(providerOf("mixtral-8x7b"), "mistral");
+  assert.equal(providerOf("grok-2"), "xai");
+});
+
+test("providerOf anchors the o-series match (panelist#235)", () => {
+  assert.equal(providerOf("foo-o1"), "unknown");
+  assert.equal(providerOf("palm-o3x"), "unknown");
+});
+
+test("providerOf maps unrecognized ids to a vendor prefix or 'unknown'", () => {
+  assert.equal(providerOf("acme/foo-1"), "acme");
+  assert.equal(providerOf("somemodel"), "unknown");
   assert.equal(providerOf(""), "unknown");
   assert.equal(providerOf(null), "unknown");
   assert.equal(providerOf(undefined), "unknown");
+});
+
+test("normalizeRubric is idempotent for object-form, array-form and absent axes (panelist#234)", () => {
+  for (const r of [
+    { axes: { a: "desc a", b: "desc b" }, killAxes: ["a"] },
+    { axes: ["a", "b"] },
+    {},
+  ]) {
+    const once = normalizeRubric(r);
+    assert.deepEqual(normalizeRubric(once), once);
+  }
+  assert.deepEqual(normalizeRubric(normalizeRubric({ axes: { a: "desc a" } })).axisDescriptions, { a: "desc a" });
 });
 
 // ── extractJsonObject: tolerate fences and surrounding prose ──────────────────
