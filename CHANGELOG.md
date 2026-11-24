@@ -97,6 +97,26 @@ instead of `0` (see **Breaking** below).
   `FAILURE_REASON_MAX_CHARS` are exported from `src/lib/score.mjs`. See
   `docs/invocation-contract.md`.
 
+- **Registered personas are now frozen copies, and a junction may not be named
+  `"bail"` ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
+  Code that mutates a persona returned by `getPersona`/`getPersonas` now throws
+  in strict mode (ESM) instead of silently editing the registry; build a new
+  record and `registerPersonas` it instead. A junction graph with a junction
+  keyed `"bail"` now throws from `runJunctionLoop`; rename that junction.
+
+- **`fenceArtifact` and `quorumRequired` are now exported from the package
+  entry ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
+  Both were documented as public but only reachable through `src/lib/score.mjs`,
+  which the `exports` map blocks. `import { fenceArtifact, quorumRequired }
+  from "panelist"` now works.
+- **TypeScript declarations now ship ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
+  A hand-written `src/index.d.ts` declares every runtime export of the package
+  entry and is wired through `types` in `package.json` (top level and the `"."`
+  exports condition). Large or open-ended shapes use loose types
+  (`unknown`/records) rather than guess. The `panelist/packs/*` subpaths stay
+  untyped. A test keeps the declared names in lockstep with the runtime
+  exports.
+
 ### Fixed
 
 - **Blank or whitespace-only axis scores are now missing, not `0`
@@ -168,6 +188,24 @@ instead of `0` (see **Breaking** below).
   calls, or whose adapters are not idempotent, should size for the extra calls
   or pass `retries: 0`. `failuresByCause` and `panelistsFailed` still count
   final failures once per cell, not once per attempt.
+
+- **`registerPersonas` stores a deep-frozen copy of each record, and is atomic
+  ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
+  The registry used to keep the caller's own object, so editing it after
+  registration changed the registered persona. Each record is now
+  `structuredClone`d and deep-frozen at registration. Registration also
+  validates every source before committing anything: an invalid record
+  partway through a call no longer leaves the earlier records, rubrics or
+  `usage` registered.
+- **`runJunctionLoop` rejects a junction id of `"bail"`
+  ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
+  The id is reserved for the engine's always-available bail decision; the
+  graph now fails fast with a clear error. Only the key is checked, so no
+  junction content is read.
+- **`.github/workflows` use one `actions/setup-node` pin
+  ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
+  `release.yml` already matches the v7.1.0 pin used by the other workflows;
+  only its comment spacing was uneven, now aligned.
 
 - **A custom register `usage` string no longer replaces the standard honesty
   caveat; it is now appended to

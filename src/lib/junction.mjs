@@ -252,6 +252,11 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   if (!graph || typeof graph.junctions !== "object" || graph.junctions == null) {
     throw new Error("panelist junction: graph must be { junctions: {...}, entry }.");
   }
+  // BAIL is reserved (panelist#251): the engine adds it to every junction. Key presence only —
+  // no junction content is read, so the information barrier holds.
+  if (Object.hasOwn(graph.junctions, BAIL)) {
+    throw new Error(`panelist junction: ${JSON.stringify(BAIL)} is a reserved decision id — a graph must not name a junction ${JSON.stringify(BAIL)}.`);
+  }
   const { horizon, spawnStrategy = "persistent", client, patienceBudget, tools, toolGate, maxTokens, temperature, maxTurns } = opts;
   const maxTurnsCap = maxTurns === undefined ? DEFAULT_MAX_TURNS : maxTurns;
   if (!Number.isInteger(maxTurnsCap) || maxTurnsCap < 1) {

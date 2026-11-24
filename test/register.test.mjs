@@ -204,3 +204,49 @@ test("a source with no modelTier leaves records without the field entirely (toda
   registerPersonas(reviewPack);
   assert.equal("modelTier" in getPersona("drive-by-installer"), false);
 });
+
+// ── panelist#251: immutability + atomicity ──────────────────────────────────
+
+const rec = (id, extra = {}) => ({
+  id,
+  name: id,
+  role: "reader",
+  caresAbout: ["a"],
+  rewards: ["b"],
+  punishes: ["c"],
+  quitsWhen: ["d"],
+  ...extra,
+});
+
+test("registered records are private deep-frozen copies (panelist#251)", () => {
+  const input = rec("imm-1");
+  registerPersonas(input);
+  input.role = "mutated";
+  input.caresAbout.push("mutated");
+  const stored = getPersona("imm-1");
+  assert.equal(stored.role, "reader");
+  assert.deepEqual(stored.caresAbout, ["a"]);
+  assert.notEqual(stored, input);
+  assert.ok(Object.isFrozen(stored));
+  assert.ok(Object.isFrozen(stored.caresAbout));
+  assert.throws(() => {
+    "use strict";
+    stored.role = "x";
+  }, TypeError);
+});
+
+test("registerPersonas is atomic: a later invalid record leaves nothing registered (panelist#251)", () => {
+  registerPersonas(rec("kept-before"));
+  assert.throws(
+    () =>
+      registerPersonas(
+        { personas: [rec("ok-1"), rec("ok-2")], rubrics: { r1: { axes: ["x"] } }, usage: "custom usage" },
+        [rec("bad", { caresAbout: [] })],
+      ),
+    /invalid persona/,
+  );
+  assert.deepEqual(getPersonas().map((p) => p.id), ["kept-before"]);
+  assert.equal(getPersona("ok-1"), null);
+  assert.equal(getRubric("r1"), null);
+  assert.equal(getUsage(), USAGE_HEADER);
+});

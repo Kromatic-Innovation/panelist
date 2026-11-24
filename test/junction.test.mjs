@@ -217,6 +217,14 @@ test("a hallucinated decision id ends the run cleanly rather than looping", asyn
   assert.equal(out.turns, 1);
 });
 
+test("a junction named \"bail\" is rejected as reserved (panelist#251)", async () => {
+  const graph = { entry: "a", junctions: { a: { content: "A", decisions: () => [] }, [BAIL]: { content: "B" } } };
+  await assert.rejects(
+    runJunctionLoop(graph, { id: "p", name: "p", role: "r" }, { client: { model: "m", complete: async () => "{}" } }),
+    /reserved decision id/,
+  );
+});
+
 test("input validation: bad strategy, missing client, unknown entry all throw", async () => {
   const client = scriptedClient([], []);
   await assert.rejects(() => runJunctionLoop(hubGraph(), READER, { spawnStrategy: "bogus", client }), /spawnStrategy must be one of/);
