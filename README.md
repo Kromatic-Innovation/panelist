@@ -23,7 +23,7 @@ Most tools that spawn personas emit a warmth/viability _score_ — the exact out
 - **Deal-killers, not scores.** The default verdict is a cut-list, not a rating.
 - **Cross-model panels, reported not enforced.** panelist bundles no provider layer (you inject one, e.g. PromptFoo/LiteLLM — see [Install](#install)), so it can't compose a cross-model panel for you or refuse to run a single-provider one. Every result carries `crossModel: boolean` (`true` when the panel you composed spans ≥2 providers) so you can check it yourself; a single-provider panel still runs to completion and returns `crossModel: false`. Spanning ≥2 providers is recommended to counter same-model self-preference / sycophancy bias — the caller is responsible for composing the panel that way.
 - **Diversity by kill-condition.** Personas differ by _what makes them quit_, not by demographics. Identity is behavioural (`rewards` / `punishes` / `quitsWhen`), never age/employer/tenure.
-- **Honesty by construction.** Every panel output auto-stamps the caveat above.
+- **Honesty by construction.** Every panel output auto-stamps the caveat above. A custom `usage` string passed to `registerPersonas({ usage })` is never a replacement: the stamped `honesty` is your text first, then the standard caveat appended (unless your text already contains the phrase "not validation", in which case it is used as-is).
 - **Isolated by construction.** No tool is reachable unless explicitly granted — see above.
 - **Calibration hooks.** Join synthetic verdicts to real downstream signal and rank personas by how well they _predict_, not how well they _read_.
 

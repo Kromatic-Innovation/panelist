@@ -78,6 +78,18 @@ minor version.
   mismatch now reports `n: 0` alongside the `null` correlation. Default keep
   and good thresholds are the medians of the usable pairs.
 
+### Changed
+
+- **A custom register `usage` string no longer replaces the standard honesty
+  caveat; it is now appended to
+  ([#242](https://github.com/Kromatic-Innovation/panelist/issues/242)).**
+  With `registerPersonas({ usage: "Internal panel output." })`, the stamped
+  `honesty` value is the custom text first, then the standard caveat, so
+  `assertHonestyStamped` is `ok: true` and `formatPanelSummary` carries the
+  marker. A custom string that already contains the marker (`"not
+  validation"`) is used as-is, not double-stamped. New export `composeUsage`
+  from `honesty.mjs`. `getUsage()` still returns the raw registered string.
+
 ### Docs
 
 - **Breaking-change protocol for releases
