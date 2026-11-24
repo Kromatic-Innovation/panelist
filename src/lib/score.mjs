@@ -152,7 +152,12 @@ export function createLimiter(max) {
     });
 }
 
-/** Fill a rubric with safe defaults. */
+/**
+ * Fill a rubric with safe defaults. Invalid values fall back to defaults and
+ * never throw, with ONE exception (panelist#244): a `killAxes` entry that is
+ * not in the (resolved) `axes` throws a descriptive Error, because such a kill
+ * would otherwise be silently ignored.
+ */
 export function normalizeRubric(rubric = {}) {
   const r = rubric || {};
   const isPlainObject = (v) => v && typeof v === "object" && !Array.isArray(v);
@@ -170,6 +175,13 @@ export function normalizeRubric(rubric = {}) {
       ? Object.keys(axisDescriptions)
       : DEFAULT_AXES;
   const killAxes = Array.isArray(r.killAxes) ? r.killAxes : [];
+  for (const k of killAxes) {
+    if (!axes.includes(k)) {
+      throw new Error(
+        `rubric killAxes entry ${JSON.stringify(k)} is not one of the rubric axes (valid axes: ${axes.map((a) => JSON.stringify(a)).join(", ")})`,
+      );
+    }
+  }
   const killFloor = Number.isFinite(r.killFloor) ? r.killFloor : DEFAULT_KILL_FLOOR;
   const cut_threshold = Number.isFinite(r.cut_threshold) ? r.cut_threshold : DEFAULT_CUT_THRESHOLD;
   // quorum (panelist#167): fraction of the panel that must report before a

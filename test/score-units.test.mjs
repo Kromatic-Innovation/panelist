@@ -314,3 +314,23 @@ test("rankCandidatesWith returns empty splits for no candidates", async () => {
   assert.deepEqual(out.shortlist, []);
   assert.deepEqual(out.cut, []);
 });
+
+// ── killAxes validation (panelist#244) ────────────────────────────────────────
+
+test("normalizeRubric throws on a misspelled kill axis, naming it and the valid axes", () => {
+  assert.throws(
+    () => normalizeRubric({ axes: ["clarity", "credibility"], killAxes: ["clarty"] }),
+    /"clarty".*"clarity", "credibility"/,
+  );
+});
+
+test("normalizeRubric throws on a kill axis absent from custom axes", () => {
+  assert.throws(() => normalizeRubric({ axes: { a: "x", b: "y" }, killAxes: ["c"] }), /"c"/);
+  assert.throws(() => normalizeRubric({ axes: ["a"], killAxes: ["resonance"] }), /"resonance"/);
+});
+
+test("normalizeRubric accepts valid kill axes and default axes with no killAxes", () => {
+  assert.deepEqual(normalizeRubric({ axes: ["a", "b"], killAxes: ["b"] }).killAxes, ["b"]);
+  assert.deepEqual(normalizeRubric({ axes: ["custom"] }).killAxes, []);
+  assert.deepEqual(normalizeRubric({ killAxes: ["clarity"] }).killAxes, ["clarity"]);
+});

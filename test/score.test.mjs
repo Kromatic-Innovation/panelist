@@ -581,3 +581,17 @@ test("crossModel is false for same-vendor and all-unknown panels (panelist#235)"
   const mixed = [fixedScorer("mistral-large", GOOD), fixedScorer("gpt-4o", GOOD)];
   assert.equal((await score(cand, reviewPack.slice(0, 1), RUBRIC, { panel: mixed })).crossModel, true);
 });
+
+test("score() throws on an unknown kill axis (panelist#244)", async () => {
+  const panel = [fixedScorer("claude-x", GOOD)];
+  await assert.rejects(
+    () => score(cand, reviewPack.slice(0, 1), { ...RUBRIC, killAxes: ["clarty"] }, { panel }),
+    /clarty/,
+  );
+});
+
+test("a valid kill axis below killFloor cuts; exactly at killFloor does not (panelist#244)", () => {
+  const rubric = { axes: ["a", "b"], killAxes: ["a"], killFloor: 4, cut_threshold: 1 };
+  assert.equal(decideVerdict({ a: 3.99, b: 9, overall: 6 }, rubric), "cut");
+  assert.equal(decideVerdict({ a: 4, b: 9, overall: 6.5 }, rubric), "keep");
+});

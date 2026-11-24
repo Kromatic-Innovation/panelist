@@ -19,7 +19,8 @@ minor version.
 
 ## [Unreleased]
 
-**Breaking.** Node.js 22 or newer is now required (see **Breaking** below).
+**Breaking.** Node.js 22 or newer is now required, and rubrics with an unknown
+`killAxes` entry now throw (see **Breaking** below).
 
 ### Breaking
 
@@ -29,6 +30,16 @@ minor version.
   2026-04-30). CI now tests a Node 22 and 24 matrix, and the release workflow
   runs on Node 22. **Upgrade step:** upgrade to Node 22 or newer before
   installing 0.5.0. No API changed.
+
+- **A `killAxes` entry that is not in `axes` now throws
+  ([#244](https://github.com/Kromatic-Innovation/panelist/issues/244)).**
+  Previously a typo in `killAxes`, or a kill axis missing from `axes`, was
+  silently ignored and the kill never fired. `normalizeRubric` (and therefore
+  `score()`) now throws an error naming the offending entry and the valid
+  axes. This is an exception to the documented "normalization never throws"
+  contract, which `docs/invocation-contract.md` now states explicitly. Callers
+  must fix or remove any `killAxes` entry that does not match an axis. Only an
+  explicitly supplied `killAxes` is validated; the default (`[]`) is unchanged.
 
 ### Fixed
 

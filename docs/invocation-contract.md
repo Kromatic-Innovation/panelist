@@ -207,7 +207,7 @@ Every field below is caller-settable on the `rubric` object passed to `score()`
 | Field           | Accepts                                                                                                     | Default                                                |
 | --------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | `axes`          | an array of axis names, **or** an object whose keys are axis names and whose values are per-axis descriptions | `["resonance", "clarity", "credibility", "scrollStop"]` |
-| `killAxes`      | an array of axis names                                                                                       | `[]`                                                    |
+| `killAxes`      | an array of axis names, each of which must also be in `axes` (otherwise throws)                              | `[]`                                                    |
 | `killFloor`     | a finite number                                                                                              | `4.0`                                                   |
 | `cut_threshold` | a finite number                                                                                              | `5.0`                                                   |
 | `quorum`        | a finite number in `[0, 1]` inclusive                                                                        | `0.5`                                                   |
@@ -219,10 +219,15 @@ keys become the axes, and the object itself is retained internally as
 `axisDescriptions` is derived from `axes` — it is not a separate field a caller
 sets.
 
-**Normalization never throws — it falls back.** A value that fails validation
-is replaced by that field's default rather than raising. This makes a bad
-rubric value silent, not loud: `cut_threshold: "7"` (a string, not a number)
-scores against `5.0`, and nothing in the result says so.
+**Normalization falls back rather than throwing — with one exception.** A
+value that fails validation is replaced by that field's default rather than
+raising. This makes a bad rubric value silent, not loud: `cut_threshold: "7"`
+(a string, not a number) scores against `5.0`, and nothing in the result says
+so. The exception is `killAxes`: an entry that is not one of the rubric's
+`axes` (a typo, or an axis the rubric does not list) makes `normalizeRubric`
+— and therefore `score()` — **throw** an error naming the entry and the valid
+axes, because a kill axis that matches nothing would silently disable the kill.
+Only an explicitly supplied `killAxes` is checked; the default is `[]`.
 
 **The validation is asymmetric, and the asymmetry is deliberate.** `killFloor`
 and `cut_threshold` are checked with `Number.isFinite` only — there is **no
