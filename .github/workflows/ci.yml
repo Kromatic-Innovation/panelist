@@ -10,15 +10,35 @@ permissions:
   contents: read
 
 jobs:
-  ci:
-    name: CI Required
+  test:
+    name: Test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          node-version: ${{ matrix.node }}
       - run: node --test test/*.test.mjs
       - run: npm run drift
       - name: Public-safe lint (org-agnostic leak shapes)
         run: bash .github/public-safe-lint.sh .
+
+  # The develop ruleset requires a check named exactly "CI Required". A matrix
+  # job reports as "Test (Node 22)" / "Test (Node 24)", so this aggregate job
+  # keeps the required name and fails unless every matrix leg passed.
+  ci:
+    name: CI Required
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Node matrix leg to pass
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: |
+          echo "test matrix result: $RESULT"
+          test "$RESULT" = "success"
