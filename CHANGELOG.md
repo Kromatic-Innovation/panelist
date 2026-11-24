@@ -19,6 +19,18 @@ minor version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`providerOf` no longer treats each unrecognized model as its own provider
+  ([#235](https://github.com/Kromatic-Innovation/panelist/issues/235)).**
+  Unrecognized ids used to fall back to the full id, so single-vendor panels
+  such as `[gpt-4o, o4-mini]` or `[mistral-large, mistral-small]` reported
+  `crossModel: true`. The vendor table now also covers the o-series
+  (anchored), `gemma`, `llama`, `mistral`/`mixtral` and `grok`; an unknown id
+  with a `vendor/` prefix maps to that prefix, and any other maps to
+  `"unknown"`. `crossModel` may now be `false` for panels that previously
+  reported `true`.
+
 ### Docs
 
 - **Breaking-change protocol for releases
