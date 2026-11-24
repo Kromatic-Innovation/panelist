@@ -155,8 +155,15 @@ export function createLimiter(max) {
 /** Fill a rubric with safe defaults. */
 export function normalizeRubric(rubric = {}) {
   const r = rubric || {};
-  const axisDescriptions =
-    r.axes && typeof r.axes === "object" && !Array.isArray(r.axes) ? r.axes : null;
+  const isPlainObject = (v) => v && typeof v === "object" && !Array.isArray(v);
+  // Object-form `axes` supplies the descriptions. On a second pass (the output
+  // of normalizeRubric fed back in) `axes` is already an array, so keep an
+  // incoming `axisDescriptions` plain object to stay idempotent (panelist#234).
+  const axisDescriptions = isPlainObject(r.axes)
+    ? r.axes
+    : Array.isArray(r.axes) && isPlainObject(r.axisDescriptions)
+      ? r.axisDescriptions
+      : null;
   const axes = Array.isArray(r.axes)
     ? r.axes
     : axisDescriptions
