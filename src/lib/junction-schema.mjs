@@ -86,6 +86,7 @@ export function reactionFrom(turn) {
 const DROP_OFF_REASON = {
   bail: "persona bailed voluntarily",
   "budget-exhausted": "patience budget exhausted before finishing",
+  "max-turns": "hard turn cap reached before finishing",
   "invalid-decision": "persona chose an unavailable/hallucinated decision",
   terminal: "reached a terminal junction with no further decisions",
 };
