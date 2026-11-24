@@ -19,6 +19,18 @@ minor version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`drift-check.mjs` auto-ran its CLI and called `process.exit()` inside any
+  consumer script that happened to be named `drift-check.mjs`
+  ([#237](https://github.com/Kromatic-Innovation/panelist/issues/237)).**
+  The CLI now runs only when `src/lib/drift-check.mjs` is itself the process
+  entry module (realpath-compared against `process.argv[1]`, which may be
+  absent), so `import { checkRecords } from "panelist"` from a consumer's
+  `scripts/drift-check.mjs` no longer prints panelist's report or exits early.
+  `npm run drift` is unchanged and still exits non-zero on drift. New export:
+  `isEntryModule`; `main()` now accepts optional injected packs.
+
 ### Docs
 
 - **Breaking-change protocol for releases

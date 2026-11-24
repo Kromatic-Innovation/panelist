@@ -21,6 +21,8 @@
 // in CI by test/honesty-gate.test.mjs over real plane outputs, which is
 // where the "no summary omits the caveat" guarantee actually gets checked.
 
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { validatePersona } from "./schema.mjs";
 import { assertHonestyStamped } from "./honesty.mjs";
 
@@ -116,17 +118,33 @@ export async function scanRepo(packs) {
   return checkRecords(records);
 }
 
-/** CLI entry: scan the repo's packs, print, resolve to 0/1. */
-export async function main() {
-  const report = await scanRepo();
+/**
+ * True only when `metaUrl` (an `import.meta.url`) is the actual entry module of this
+ * process — NOT merely an importer whose own script happens to be named drift-check.mjs
+ * (panelist#237). Compares realpath'd file URLs so symlinked bins still match. Never throws.
+ * @param {string} metaUrl
+ * @param {string|undefined} [argv1]  defaults to process.argv[1]
+ */
+export function isEntryModule(metaUrl, argv1 = process.argv[1]) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(fileURLToPath(metaUrl)) === realpathSync(argv1);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * CLI entry: scan the repo's packs, print, resolve to 0/1.
+ * @param {object[]} [packs]  inject record arrays (tests); defaults to the shipped packs.
+ */
+export async function main(packs) {
+  const report = await scanRepo(packs);
   console.log(formatReport(report));
   return report.ok ? 0 : 1;
 }
 
-// Run as a script: `node src/lib/drift-check.mjs`
-if (process.argv[1]) {
-  const invoked = process.argv[1].replace(/\\/g, "/");
-  if (invoked.endsWith("drift-check.mjs")) {
-    main().then((code) => process.exit(code));
-  }
+// Run as a script (`node src/lib/drift-check.mjs`) ONLY when this module is the entry.
+if (isEntryModule(import.meta.url)) {
+  main().then((code) => process.exit(code));
 }
