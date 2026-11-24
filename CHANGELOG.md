@@ -11,7 +11,27 @@ MINOR releases (`0.x.0`) may include breaking changes, and PATCH releases
 reaches `1.0.0`, standard semver discipline (breaking changes only on MAJOR)
 takes over.
 
+**Breaking changes are flagged.** Any release that can break existing
+callers carries a `### Breaking` section naming the changed interface and
+what callers must change, and a **Breaking.** banner under its version
+heading. Search this file for `### Breaking` before upgrading across a
+minor version.
+
 ## [Unreleased]
+
+### Docs
+
+- **Breaking-change protocol for releases
+  ([#233](https://github.com/Kromatic-Innovation/panelist/issues/233)).**
+  `CONTRIBUTING.md`'s release steps now require a `### Breaking` section in
+  any changelog entry that breaks callers, and add a step 7: after the npm
+  publish, file one consumer-update issue in each consumer repo (version,
+  breaking change, interface to update) and link the issues from the GitHub
+  Release. The consumer list is not kept in this public repo. Instead the
+  step documents an org code-search discovery method that covers nested
+  `package.json` manifests, lockfile-only transitive dependents, and
+  consumers that get panelist through another Kromatic package installed by
+  git tag. `AGENTS.md` points to the step.
 
 ## [0.4.2] - 2026-11-21
 

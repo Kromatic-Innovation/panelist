@@ -106,6 +106,20 @@ registry and no second publish workflow. To cut a release:
    sections, so the shape of the release is legible without reading every
    bullet. Any release-wide behavior warning goes above the Highlights, in a
    banner directly under the version heading.
+
+   **Flag every breaking change with a `### Breaking` section.** If the
+   release changes anything a consumer can observe in a way their existing
+   code may not survive (a removed or renamed export, a changed signature,
+   return shape or default, a new required field, a different verdict or
+   error for the same input), the entry must carry a `### Breaking` section,
+   placed first among the detailed sections (before `### Added`). Give each
+   bullet the interface that changed (the export, option or field by name),
+   what it did before, what it does now, and what a caller must change. Keep
+   the `**Breaking.**` banner under the version heading as well, so the
+   release reads as breaking from its first line. Under the pre-1.0 rule
+   (below) a breaking change ships as a MINOR bump; the `### Breaking`
+   heading is how step 7 knows to run, so do not leave it out because the
+   bump is "only" a minor.
 3. Commit the bump on `develop` and merge it via PR as usual.
 4. Promote `develop` → `main` (the `Promote Main` workflow,
    `.github/workflows/promote-main.yml`), so the release commit is on `main`.
@@ -137,6 +151,84 @@ registry and no second publish workflow. To cut a release:
    > cut Releases for `v0.2.0`, `v0.2.1` and `v0.3.0`, whose trees still
    > contain the `publish.yml` deleted in panelist#123, and all three ran it
    > and published `@kromatic-innovation/panelist` to GitHub Packages.
+
+7. **If the new version's `CHANGELOG.md` entry has a `### Breaking` section,
+   file one consumer-update issue in each consumer repo** — after
+   `release.yml` has published the version to npm (step 5), never before, so
+   every issue points at a version a consumer can actually install. Kromatic
+   consumers do not pin panelist's version: they accept every upgrade, so a
+   breaking change reaches them on their next lockfile bump whether or not
+   they have been told. This step is how they are told.
+
+   Each consumer issue must contain:
+
+   - **the version** that introduces the break (`panelist X.Y.Z`), linking its
+     GitHub Release and `CHANGELOG.md` section;
+   - **the breaking change**, copied from the `### Breaking` bullets: what the
+     behavior was and what it is now;
+   - **the interface the consumer must update** — the panelist export, option
+     or field by name — and where that consumer uses it (the manifest and the
+     call sites the discovery search below turned up), with the change the
+     consumer has to make.
+
+   File the issues in the consumer repos, not here, and then link each one
+   from the version's GitHub Release (`gh release edit vX.Y.Z --notes-file
+   <notes.md>`, appending a "Consumer updates" list) so the public record
+   shows the break was carried to every consumer. A consumer repo that is
+   private should be linked as a fully qualified `owner/repo#N` reference in
+   the Release notes only if naming it there is acceptable; otherwise record
+   the count ("consumer-update issues filed in N repos") and keep the links
+   in the private issues themselves.
+
+   **Finding the consumers.** Most consumers are private repos, so this public
+   file deliberately does not list them — a hand-kept list would also go
+   stale. Run the discovery search at release time instead; it reflects the
+   org's current code each time:
+
+   ```bash
+   # Direct dependents: every package.json in the org that mentions panelist,
+   # at ANY depth — a consumer may declare it in a sub-directory package
+   # (packages/*/package.json, apps/*/package.json, tools/*/package.json), not
+   # only at its root. The filename qualifier matches nested paths too. Pass
+   # the term bare: gh quotes it itself, and adding quotes breaks the query.
+   gh search code --owner Kromatic-Innovation panelist \
+     --filename package.json --json repository,path \
+     --jq '.[] | "\(.repository.nameWithOwner)  \(.path)"' | sort -u
+
+   # Transitive dependents: repos whose LOCKFILE resolves panelist even though
+   # no package.json of theirs names it — they receive it through another
+   # Kromatic package.
+   for f in package-lock.json pnpm-lock.yaml yarn.lock; do
+     gh search code --owner Kromatic-Innovation panelist \
+       --filename "$f" --json repository,path \
+       --jq '.[] | "\(.repository.nameWithOwner)  \(.path)"'
+   done | sort -u
+   ```
+
+   Then follow **git-tag consumers** one hop further. A Kromatic package that
+   depends on panelist and is itself installed by git tag
+   (`"github:Kromatic-Innovation/<pkg>#vX.Y.Z"` or
+   `git+https://github.com/Kromatic-Innovation/<pkg>.git#vX.Y.Z`) passes
+   panelist on to its own consumers, and a lockfile search can miss them,
+   because a git dependency's lock entry may not name panelist at all. For
+   each package the first search found, search for repos that install that
+   package from git:
+
+   ```bash
+   gh search code --owner Kromatic-Innovation 'Kromatic-Innovation/<pkg>' \
+     --filename package.json --json repository,path \
+     --jq '.[] | "\(.repository.nameWithOwner)  \(.path)"' | sort -u
+   ```
+
+   Repeat until a hop finds no new repos. A transitive consumer gets an issue
+   only if it calls the changed interface itself. If it only receives
+   panelist through the intermediate package, the issue goes to that
+   package's repo, which then cuts its own release. GitHub code search
+   indexes only each repo's default branch, so a consumer that declares
+   panelist only on a feature branch will not show up. Treat the result as
+   the consumer list at release time, not as a guarantee nothing else
+   exists. Run the searches with credentials that can read the org's private
+   repos, or they will return only the public ones.
 
 **The tag must be on `main`.** `release.yml` fires from a `v*` tag pushed from
 any ref, so it defends itself: it hard-fails the job if the tagged commit is

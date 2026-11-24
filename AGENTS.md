@@ -12,6 +12,9 @@ pre-filter.
 
 - Default branch: `develop`; open PRs against `develop`.
 - Releases are tagged from `main` after a `develop → main` fast-forward.
+- A release whose `CHANGELOG.md` entry has a `### Breaking` section must file
+  a consumer-update issue in every consumer repo after the npm publish — see
+  `CONTRIBUTING.md` → "Releasing", step 7.
 
 ## Strategy tier
 
