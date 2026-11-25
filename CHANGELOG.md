@@ -21,7 +21,7 @@ minor version.
 
 ### Changed
 
-- README: a one-line `npm i panelist` install now sits directly under the hero image, before the first callout, instead of after four paragraphs and two long callouts (#288).
+- README: a one-line `npm i panelist` install now sits directly under the hero image, before the first callout, instead of after four paragraphs and two long callouts (panelist#288).
 
 ## [0.5.0] - 2026-11-25
 
