@@ -210,9 +210,9 @@ failed. It also drops Node 20 and lands the 2026-11-24 audit fixes.
   entries in task order, reflecting each failed cell's final attempt. Reasons
   are truncated to 200 characters, never include reply text, and have any
   echoed prompt or artifact text replaced with `[redacted]`.
-  `failuresByCause` counts are unchanged. `FAILURE_SAMPLE_LIMIT` and
-  `FAILURE_REASON_MAX_CHARS` are exported from `src/lib/score.mjs`. See
-  `docs/invocation-contract.md`.
+  `failuresByCause` counts are unchanged. The limits (5 entries, 200
+  characters) are internal constants in `src/lib/score.mjs`, not exports of
+  the package entry. See `docs/invocation-contract.md`.
 
 - **Registered personas are now frozen copies, and a junction may not be named
   `"bail"` ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
@@ -272,7 +272,7 @@ failed. It also drops Node 20 and lands the 2026-11-24 audit fixes.
   `runJunctionLoop` now accepts only a finite `cost > 0` (omitted still
   defaults to 1); anything else, including `Infinity`, throws when that
   junction is reached, before a turn is spent. A new hard turn cap,
-  `opts.maxTurns` (default 1000, `DEFAULT_MAX_TURNS`), ends a walk with the
+  `opts.maxTurns` (default 1000), ends a walk with the
   new `stopReason: "max-turns"`. Documented in `docs/junction-contract.md`.
 - **`drift-check.mjs` auto-ran its CLI and called `process.exit()` inside any
   consumer script that happened to be named `drift-check.mjs`
@@ -281,8 +281,10 @@ failed. It also drops Node 20 and lands the 2026-11-24 audit fixes.
   entry module (realpath-compared against `process.argv[1]`, which may be
   absent), so `import { checkRecords } from "panelist"` from a consumer's
   `scripts/drift-check.mjs` no longer prints panelist's report or exits early.
-  `npm run drift` is unchanged and still exits non-zero on drift. New export:
-  `isEntryModule`; `main()` now accepts optional injected packs.
+  `npm run drift` is unchanged and still exits non-zero on drift. The
+  entry-module check (`isEntryModule`) is internal to `drift-check.mjs`, not
+  exported from the package entry; `main()` now accepts optional injected
+  packs.
 
 - **`calibratePersonas` no longer reports confident correlations from missing
   or non-numeric data
@@ -332,8 +334,9 @@ failed. It also drops Node 20 and lands the 2026-11-24 audit fixes.
   `honesty` value is the custom text first, then the standard caveat, so
   `assertHonestyStamped` is `ok: true` and `formatPanelSummary` carries the
   marker. A custom string that already contains the marker (`"not
-  validation"`) is used as-is, not double-stamped. New export `composeUsage`
-  from `honesty.mjs`. `getUsage()` still returns the raw registered string.
+  validation"`) is used as-is, not double-stamped. The composition is done by
+  `composeUsage`, an internal helper in `honesty.mjs` that the package entry
+  does not export. `getUsage()` still returns the raw registered string.
 
 ### Security
 
