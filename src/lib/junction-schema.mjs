@@ -128,21 +128,29 @@ export function buildTrace(loopResult) {
  * }}
  */
 export function aggregateJunctionTraces(traces = []) {
-  const dropOff = {};
-  const perJunction = {};
+  // Junction ids are untrusted keys: accumulate in Maps (a `__proto__` key must never reach
+  // Object.prototype) and emit plain objects via Object.fromEntries, which defines own data
+  // properties, so the public shape is unchanged.
+  const dropOff = new Map();
+  const perJunction = new Map();
   for (const trace of traces) {
     if (!trace) continue;
     const stoppedAt = trace.dropOff?.stoppedAt ?? "unknown";
-    dropOff[stoppedAt] = (dropOff[stoppedAt] || 0) + 1;
+    dropOff.set(stoppedAt, (dropOff.get(stoppedAt) ?? 0) + 1);
     for (const r of trace.junctionTrace || []) {
-      const bucket = (perJunction[r.junction] ||= { visits: 0, kept: 0, skimmed: 0, bailed: 0 });
+      let bucket = perJunction.get(r.junction);
+      if (!bucket) perJunction.set(r.junction, (bucket = { visits: 0, kept: 0, skimmed: 0, bailed: 0 }));
       bucket.visits += 1;
-      if (r.engagement in bucket && r.engagement !== "visits") bucket[r.engagement] += 1;
+      if (Object.hasOwn(bucket, r.engagement) && r.engagement !== "visits") bucket[r.engagement] += 1;
     }
   }
   // Stamp the returned rollup — it's a public output surface in its own right
   // (panelist#81), distinct from the per-run traces it aggregates (which stay
   // unstamped; only the top-level runJunctionLoop envelope is stamped, not the
   // trace — see junction.mjs).
-  return stampHonesty({ runs: traces.filter(Boolean).length, dropOff, perJunction });
+  return stampHonesty({
+    runs: traces.filter(Boolean).length,
+    dropOff: Object.fromEntries(dropOff),
+    perJunction: Object.fromEntries(perJunction),
+  });
 }

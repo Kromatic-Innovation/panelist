@@ -257,6 +257,12 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   if (Object.hasOwn(graph.junctions, BAIL)) {
     throw new Error(`panelist junction: ${JSON.stringify(BAIL)} is a reserved decision id — a graph must not name a junction ${JSON.stringify(BAIL)}.`);
   }
+  // Reserved property names (panelist prototype-pollution hardening): never valid junction ids.
+  for (const reserved of ["__proto__", "constructor", "prototype"]) {
+    if (Object.hasOwn(graph.junctions, reserved)) {
+      throw new Error(`panelist junction: ${JSON.stringify(reserved)} is a reserved name — a graph must not name a junction ${JSON.stringify(reserved)}.`);
+    }
+  }
   const { horizon, spawnStrategy = "persistent", client, patienceBudget, tools, toolGate, maxTokens, temperature, maxTurns } = opts;
   const maxTurnsCap = maxTurns === undefined ? DEFAULT_MAX_TURNS : maxTurns;
   if (!Number.isInteger(maxTurnsCap) || maxTurnsCap < 1) {
