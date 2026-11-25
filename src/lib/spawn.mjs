@@ -21,19 +21,25 @@
 //     is score()'s shape ({ transport, unparsable }). On parse failure `message`
 //     is the raw trimmed reply text (for humans), not a parsed field. (Full honesty-guardrail
 //     auto-stamping is panelist#6; this just keeps the wrapper caveat-capable.)
-//   - `isolation`   is ALWAYS present (panelist#72): { tools, denied }. `tools`
-//     defaults to `[]` — spawn grants NO tools unless opts.tools names them
-//     explicitly (see isolation.mjs; wildcard grants throw). `denied` reports
-//     attempted-but-denied tool calls rather than swallowing them.
+//   - `isolation`   is ALWAYS present (panelist#72): { tools, denied, used,
+//     unexpected }. `tools` defaults to `[]` — spawn grants NO tools unless
+//     opts.tools names them explicitly (see isolation.mjs; wildcard grants
+//     throw). `denied` reports attempted-but-denied tool calls rather than
+//     swallowing them. `used` (panelist#278) is the adapter-reported
+//     `res.toolsUsed`, sorted and de-duplicated, or `null` when the adapter did
+//     not report; `unexpected` is the part of `used` outside `tools`.
 //
 // The model client is INJECTED (deps.client), the same adapter shape score.mjs
 // uses: { model, complete: async ({prompt, maxTokens, temperature, tools}) =>
-// { ok, text, model, deniedToolCalls? } }. No live provider is bundled; the
+// { ok, text, model, deniedToolCalls?, toolsUsed? } }. No live provider is bundled; the
 // default throws. An adapter that actually dispatches tool calls is expected to
 // consult the injected gate (deps.toolGate, or build one itself against the
 // same `tools` allowlist) before calling one, and MAY additionally report
 // attempted-but-denied calls back via `res.deniedToolCalls` (array of tool id
 // strings, or `{ tool, at }` objects) — spawn merges those into `isolation.denied`.
+// It MAY also report the tool ids it actually invoked via `res.toolsUsed`
+// (panelist#278); spawn records them in `isolation.used` and flags any outside
+// the allowlist in `isolation.unexpected`. Reporting only: nothing fails on it.
 //
 // Model tier resolution (panelist#113 + panelist#119, companion to cwc#1879):
 // most specific wins — opts.model (explicit per-call) beats persona.modelTier
@@ -45,7 +51,7 @@
 
 import { getPersona } from "./register.mjs";
 import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
-import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial } from "./isolation.mjs";
+import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial, normalizeReportedToolsUsed } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
 
 const MODES = new Set(["vote", "comment", "converse"]);
@@ -161,7 +167,7 @@ function normalizeDealKillers(v) {
  *     instead of spawn building its own from opts.tools.
  *   @param {number} [deps.maxTokens]         override DEFAULT_MAX_TOKENS (panelist#85).
  *   @param {number} [deps.temperature]       override DEFAULT_TEMPERATURE (panelist#85).
- * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[]|null, parseOk: boolean, failuresByCause: {transport:number, unparsable:number}, isolation: { tools: string[], denied: object[] }, honesty: string }>}
+ * @returns {Promise<{ personaId, mode, verdict: object|null, message: string, dealKillers: string[]|null, parseOk: boolean, failuresByCause: {transport:number, unparsable:number}, isolation: { tools: string[], denied: object[], used: string[]|null, unexpected: string[] }, honesty: string }>}
  */
 export async function spawn(personaId, opts = {}, deps = {}) {
   const { mode, artifact, instruction, responseSchema, horizon, tools, model } = opts;
@@ -227,7 +233,8 @@ export async function spawn(personaId, opts = {}, deps = {}) {
   // — an adapter that enforces upstream of panelist still gets denials surfaced.
   const reported = Array.isArray(res.deniedToolCalls) ? res.deniedToolCalls : [];
   const denied = [...gate.denied, ...reported.map((entry) => normalizeReportedDenial(entry, personaId)).filter(Boolean)];
-  const isolation = buildIsolationEnvelope(gate.tools, denied);
+  // toolsUsed (panelist#278): adapter-reported invoked tools, or null if not reported.
+  const isolation = buildIsolationEnvelope(gate.tools, denied, normalizeReportedToolsUsed(res));
 
   // Auto-stamp the honesty caveat on the returned envelope (panelist#81,
   // PAN-01) — spawn is the foundational single-turn contract, and runPersona

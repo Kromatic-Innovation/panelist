@@ -7,6 +7,8 @@ import {
   recordDenial,
   createToolGate,
   buildIsolationEnvelope,
+  normalizeReportedToolsUsed,
+  createToolsUsedAccumulator,
   unionTools,
 } from "../src/lib/isolation.mjs";
 
@@ -87,10 +89,12 @@ test("recordDenial builds the locked {tool, reviewer, at} shape with an ISO time
 });
 
 test("buildIsolationEnvelope always returns arrays, never undefined", () => {
-  assert.deepEqual(buildIsolationEnvelope(undefined, undefined), { tools: [], denied: [] });
+  assert.deepEqual(buildIsolationEnvelope(undefined, undefined), { tools: [], denied: [], used: null, unexpected: [] });
   assert.deepEqual(buildIsolationEnvelope(["web"], [{ tool: "recall", reviewer: "x", at: "t" }]), {
     tools: ["web"],
     denied: [{ tool: "recall", reviewer: "x", at: "t" }],
+    used: null,
+    unexpected: [],
   });
 });
 
@@ -177,4 +181,58 @@ test("isolation.tools is panel-wide: two reviewers under one config resolve to i
     { isolation: { tools: second.tools } },
   ]);
   assert.deepEqual(panelTools, ["web", "recall"]);
+});
+
+// ── toolsUsed reporting (panelist#278) ───────────────────────────────────────
+
+test("normalizeReportedToolsUsed: an array is a report; non-string entries are dropped", () => {
+  assert.deepEqual(normalizeReportedToolsUsed({ toolsUsed: ["lookup", 3, null, "web", { tool: "x" }] }), ["lookup", "web"]);
+  assert.deepEqual(normalizeReportedToolsUsed({ toolsUsed: [] }), []);
+});
+
+test("normalizeReportedToolsUsed: omitted or non-array means not reported (null, never [])", () => {
+  assert.equal(normalizeReportedToolsUsed({ ok: true, text: "x" }), null);
+  assert.equal(normalizeReportedToolsUsed({ toolsUsed: "lookup" }), null);
+  assert.equal(normalizeReportedToolsUsed({ toolsUsed: { lookup: true } }), null);
+  assert.equal(normalizeReportedToolsUsed({ toolsUsed: null }), null);
+  assert.equal(normalizeReportedToolsUsed(null), null);
+  assert.equal(normalizeReportedToolsUsed(undefined), null);
+});
+
+test("buildIsolationEnvelope: used is sorted and de-duplicated; unexpected is the out-of-allowlist part", () => {
+  const env = buildIsolationEnvelope(["web"], [], ["web", "lookup", "web", 7, "a"]);
+  assert.deepEqual(env.used, ["a", "lookup", "web"]);
+  assert.deepEqual(env.unexpected, ["a", "lookup"]);
+});
+
+test("buildIsolationEnvelope: unexpected uses isToolGranted's exact-match rule", () => {
+  const env = buildIsolationEnvelope(["web"], [], ["Web", " web", "web"]);
+  assert.deepEqual(env.unexpected, [" web", "Web"]);
+});
+
+test("buildIsolationEnvelope: used null (not reported) vs [] (reported nothing) stay distinct", () => {
+  const notReported = buildIsolationEnvelope(["web"], []);
+  assert.equal(notReported.used, null);
+  assert.deepEqual(notReported.unexpected, []);
+  assert.equal(buildIsolationEnvelope([], [], null).used, null);
+  assert.equal(buildIsolationEnvelope([], [], "lookup").used, null);
+  const empty = buildIsolationEnvelope(["web"], [], []);
+  assert.deepEqual(empty.used, []);
+  assert.deepEqual(empty.unexpected, []);
+});
+
+test("createToolsUsedAccumulator: union when every call reports, null when any call does not", () => {
+  const all = createToolsUsedAccumulator();
+  all.add({ toolsUsed: ["b", "a"] });
+  all.add({ toolsUsed: [] });
+  all.add({ toolsUsed: ["a", "c"] });
+  assert.deepEqual(all.used(), ["a", "b", "c"]);
+
+  const one = createToolsUsedAccumulator();
+  one.add({ toolsUsed: ["a"] });
+  one.add({ ok: true, text: "no report" });
+  one.add({ toolsUsed: ["b"] });
+  assert.equal(one.used(), null);
+
+  assert.deepEqual(createToolsUsedAccumulator().used(), [], "no call means nothing was invoked");
 });

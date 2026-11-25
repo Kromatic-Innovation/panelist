@@ -116,5 +116,7 @@ export {
   recordDenial,
   createToolGate,
   buildIsolationEnvelope,
+  normalizeReportedToolsUsed,
+  createToolsUsedAccumulator,
   unionTools,
 } from "./lib/isolation.mjs";

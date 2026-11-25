@@ -51,7 +51,9 @@
 // `client.complete({ prompt, tools })`, and the reply is parsed with score.mjs's
 // extractJsonObject. Isolation (panelist#72/#75) is gated the SAME way spawn.mjs
 // gates it: deny-by-default via `opts.tools`/`opts.toolGate` (isolation.mjs's
-// createToolGate), and the returned `isolation: { tools, denied }` envelope is
+// createToolGate), and the returned `isolation: { tools, denied, used, unexpected }`
+// envelope (`used` = union of adapter-reported `res.toolsUsed` across turns, or
+// `null` if any turn did not report — panelist#278) is
 // present on every stop path (bail, budget-exhaustion, terminal, invalid-decision) —
 // there is exactly one return statement in this loop, so no early-return path can
 // skip the envelope. (spawn() itself is single-turn and registry-bound, so it can
@@ -69,7 +71,7 @@
 
 import { renderPersona, extractJsonObject, fenceArtifact } from "./score.mjs";
 import { buildTrace, normalizeEngagement } from "./junction-schema.mjs";
-import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial } from "./isolation.mjs";
+import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial, createToolsUsedAccumulator } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
 import { BAIL, DEFAULT_MAX_TURNS } from "./junction-constants.mjs";
 
@@ -245,7 +247,7 @@ function parseReply(text) {
  *   transcript: {turn:number, junctionId:string, view:object, reaction:string, engagement:string, decision:string|null}[],
  *   trace: {entryJunction:string, junctionTrace:object[], dropOff:{stoppedAt:string, reason:string}},
  *   verdict: any,
- *   isolation: { tools: string[], denied: object[] },
+ *   isolation: { tools: string[], denied: object[], used: string[]|null, unexpected: string[] },
  * }>}
  */
 export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
@@ -286,6 +288,7 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   // its own from opts.tools, defaulting to [] when omitted.
   const gate = toolGate || createToolGate({ tools, reviewer: reviewerFor(persona) });
   const reportedDenied = [];
+  const toolsUsed = createToolsUsedAccumulator();
 
   // Seed the patience budget. Explicit opt wins; then a graph-supplied patience(horizon); then the default.
   const seed =
@@ -356,6 +359,8 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
       const denial = normalizeReportedDenial(entry, reviewerFor(persona));
       if (denial) reportedDenied.push(denial);
     }
+    // toolsUsed (panelist#278): union across turns, null if any turn did not report.
+    toolsUsed.add(res);
     const { reaction, engagement: rawEngagement, decision } = parseReply(res.text);
     // Normalize the persona-reported engagement to the generic 3-state now (idempotent
     // when re-projected by the schema builder), deriving it from the decision when the
@@ -395,7 +400,7 @@ export async function runJunctionLoop(graph, persona, opts = {}, hooks = {}) {
   // Isolation envelope (panelist#72/#75): present on EVERY stop path (bail,
   // budget-exhaustion, terminal, invalid-decision) because there is exactly one
   // return statement in this loop — no early-return path can skip it.
-  const isolation = buildIsolationEnvelope(gate.tools, [...gate.denied, ...reportedDenied]);
+  const isolation = buildIsolationEnvelope(gate.tools, [...gate.denied, ...reportedDenied], toolsUsed.used());
 
   const result = { strategy: spawnStrategy, entry: graph.entry, path, stopReason, turns: turn, budgetRemaining: budget, transcript, isolation };
 

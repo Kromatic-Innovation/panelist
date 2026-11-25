@@ -95,14 +95,14 @@ test("runPersona isolation (panelist#72): defaults to no tools, honors an explic
   const client = fixedSpawn("claude-x", { message: "reacting", dealKillers: [] });
 
   const defaultOut = await runPersona("drive-by-installer", { mode: "comment", artifact }, { client });
-  assert.deepEqual(defaultOut.isolation, { tools: [], denied: [] });
+  assert.deepEqual(defaultOut.isolation, { tools: [], denied: [], used: null, unexpected: [] });
 
   const grantedOut = await runPersona(
     "drive-by-installer",
     { mode: "comment", artifact, tools: ["recall"] },
     { client },
   );
-  assert.deepEqual(grantedOut.isolation, { tools: ["recall"], denied: [] });
+  assert.deepEqual(grantedOut.isolation, { tools: ["recall"], denied: [], used: null, unexpected: [] });
 });
 
 // ── panelist#113: per-call model pass-through ───────────────────────────────

@@ -60,6 +60,20 @@ instead of `0` (see **Breaking** below).
 
 ### Added
 
+- **The `isolation` envelope records adapter-reported tool use
+  ([#278](https://github.com/Kromatic-Innovation/panelist/issues/278)).**
+  An adapter's `complete()` may return `toolsUsed: string[]`, the tool ids it
+  actually invoked. `spawn()`, `runPersona()`, `score()` and
+  `runJunctionLoop()` now return `isolation: { tools, denied, used,
+  unexpected }`. `used` is the sorted, de-duplicated union across the run's
+  model calls, or `null` when any call did not report (so "not reported" no
+  longer looks like "used nothing"). `unexpected` lists reported tools outside
+  the allowlist. Reporting only: no verdict or stop reason changes. New
+  helpers `normalizeReportedToolsUsed` and `createToolsUsedAccumulator`;
+  `buildIsolationEnvelope` takes an optional third `used` argument. Callers
+  that compare the whole envelope with an exact-shape check will see the two
+  new keys.
+
 - **`personasMissing`, `verdictReason` and the `requireEveryPersona` rubric
   setting
   ([#245](https://github.com/Kromatic-Innovation/panelist/issues/245)).**

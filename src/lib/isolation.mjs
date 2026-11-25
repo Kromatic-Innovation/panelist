@@ -31,7 +31,10 @@
 // Pure, zero-dep ESM. Nothing here talks to a model or a real tool — an actual
 // agentic adapter (deps.client) is responsible for calling gate.check() before
 // dispatching a tool call, or for reporting its own denials via
-// res.deniedToolCalls, which spawn.mjs merges in.
+// res.deniedToolCalls, which spawn.mjs merges in. An adapter MAY also report
+// the tools it actually invoked via res.toolsUsed (panelist#278); panelist
+// records that as `isolation.used` and flags out-of-allowlist entries in
+// `isolation.unexpected`. Reporting honestly remains the adapter's job.
 
 /**
  * Known identifiers for a tool-discovery/tool-search capability — the thing
@@ -147,11 +150,63 @@ export function normalizeReportedDenial(entry, reviewer) {
   return null;
 }
 
-/** Build the locked `isolation` envelope shape: `{ tools, denied }`. */
-export function buildIsolationEnvelope(effectiveTools, denied) {
+/**
+ * Normalize an adapter's self-reported `res.toolsUsed` (panelist#278) — the
+ * tool ids the adapter says it actually invoked during one complete() call.
+ * Returns a string array (non-string entries dropped), or `null` when the
+ * adapter did not report: `toolsUsed` absent or not an array. `[]` is a real
+ * report ("invoked nothing") and is never used to mean "not reported".
+ * @param {object} res  one complete() response.
+ * @returns {string[]|null}
+ */
+export function normalizeReportedToolsUsed(res) {
+  if (!res || typeof res !== "object" || !Array.isArray(res.toolsUsed)) return null;
+  return res.toolsUsed.filter((t) => typeof t === "string");
+}
+
+/**
+ * Accumulate per-call `toolsUsed` reports across a run (panelist#278), so the
+ * "every call reported" rule lives in one place. `add(res)` takes one ok
+ * complete() response; `used()` returns the sorted, de-duplicated union, or
+ * `null` if ANY call added did not report. A run with no call returns `[]`:
+ * nothing was invoked, so nothing went unreported.
+ * @returns {{ add: (res: object) => void, used: () => string[]|null }}
+ */
+export function createToolsUsedAccumulator() {
+  const set = new Set();
+  let unreported = false;
   return {
-    tools: Array.isArray(effectiveTools) ? effectiveTools : [],
+    add(res) {
+      const reported = normalizeReportedToolsUsed(res);
+      if (reported === null) unreported = true;
+      else for (const t of reported) set.add(t);
+    },
+    used() {
+      return unreported ? null : [...set].sort();
+    },
+  };
+}
+
+/**
+ * Build the locked `isolation` envelope shape: `{ tools, denied, used, unexpected }`.
+ *   - `used` (panelist#278): the sorted, de-duplicated tool ids the adapter
+ *     reported invoking, or `null` when tool use was not reported. Non-string
+ *     entries are dropped; a non-array (including omitted) is `null`.
+ *   - `unexpected`: entries of `used` not granted by `tools` (same exact-match
+ *     rule as isToolGranted). Always an array; `[]` when `used` is `null`.
+ * Reported only: a non-empty `unexpected` changes no verdict or stop reason.
+ * @param {string[]} effectiveTools
+ * @param {object[]} denied
+ * @param {string[]|null} [used]  omitted/non-array = not reported (`null`).
+ */
+export function buildIsolationEnvelope(effectiveTools, denied, used) {
+  const tools = Array.isArray(effectiveTools) ? effectiveTools : [];
+  const usedList = Array.isArray(used) ? [...new Set(used.filter((t) => typeof t === "string"))].sort() : null;
+  return {
+    tools,
     denied: Array.isArray(denied) ? denied : [],
+    used: usedList,
+    unexpected: usedList === null ? [] : usedList.filter((t) => !isToolGranted(t, tools)),
   };
 }
 
