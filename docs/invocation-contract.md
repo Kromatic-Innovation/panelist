@@ -140,6 +140,23 @@ adapter from reaching a tool:
 See [`src/lib/isolation.mjs`](../src/lib/isolation.mjs) for the deny/allow
 decision as an independently testable unit.
 
+### Threat-model note: what the isolation envelope can and cannot show
+
+Enforcement of the allowlist is the **adapter's** responsibility, and panelist
+cannot verify it. `isolation.tools` records what panelist *granted and
+forwarded*; it is not evidence about what the adapter *did*. In particular:
+
+- An adapter that ignores the forwarded allowlist (and exposes ambient tools to
+  the persona) is **not detectable by panelist**. The envelope still reads
+  `isolation: { tools: [], denied: [] }`, exactly as it would for a correctly
+  enforcing adapter.
+- An empty `isolation.denied` shows only that no denial was *reported* through
+  the gate or `res.deniedToolCalls`. It does not show that no tool was used.
+  `denied` is populated only by adapters that consult the gate or self-report.
+- Treat the adapter as part of the trusted computing base for isolation: use an
+  adapter you control or have reviewed, and test its enforcement independently
+  (for example, grant `[]` and confirm the provider call exposes no tools).
+
 ## Mode semantics
 
 - **`vote`** — render a judgement. If `responseSchema` is supplied, the model
