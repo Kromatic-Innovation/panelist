@@ -12,7 +12,7 @@
 //
 // ADAPTER CONTRACT (a "panelist" / "client"):
 //   { model: string, complete: async ({ prompt, maxTokens, temperature, tools }) =>
-//       { ok: true, text: string, model?: string, deniedToolCalls?: array } | { ok: false, reason?: string },
+//       { ok: true, text: string, model?: string, deniedToolCalls?: array, toolsUsed?: string[] } | { ok: false, reason?: string },
 //     temperature?: number, maxTokens?: number }
 //
 // PER-ENTRY temperature/maxTokens (panelist#144): an entry may declare its own
@@ -25,10 +25,14 @@
 //
 // Isolation (panelist#72/#77): deny by default via deps.tools/deps.toolGate
 // (isolation.mjs's createToolGate), same posture as spawn.mjs/junction.mjs. The
-// returned `isolation: { tools, denied }` envelope is honest — it reflects what
-// was actually forwarded and denied, not just what was requested. The
-// neutral/heuristic-fallback path (no model client invoked) stays `{ tools: [],
-// denied: [] }` unconditionally; that is correct, not an oversight.
+// returned `isolation: { tools, denied, used, unexpected }` envelope is honest —
+// it reflects what was actually forwarded and denied, not just what was
+// requested. `toolsUsed` (panelist#278) is the adapter's optional report of the
+// tool ids it actually invoked in one call; `isolation.used` is the union across
+// every model call in the run, or `null` if any call (including a failed one)
+// did not report, and `isolation.unexpected` lists the reported tools outside
+// the allowlist. The neutral/heuristic-fallback path stays `{ tools: [],
+// denied: [], used: [], unexpected: [] }` unconditionally.
 //
 // PUBLIC API
 //   score(candidate, personas, rubric, deps)  -> evaluation (alias scoreCandidate)
@@ -50,7 +54,7 @@
 // ── Rubric normalization ────────────────────────────────────────────────────
 
 import { USAGE_HEADER } from "./schema.mjs";
-import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial } from "./isolation.mjs";
+import { createToolGate, buildIsolationEnvelope, normalizeReportedDenial, createToolsUsedAccumulator } from "./isolation.mjs";
 import { stampHonesty } from "./honesty.mjs";
 
 const DEFAULT_AXES = ["resonance", "clarity", "credibility", "scrollStop"];
@@ -493,6 +497,9 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
   // scoreCandidate builds its own from deps.tools, defaulting to [] when omitted.
   const gate = deps.toolGate || createToolGate({ tools: deps.tools, reviewer: "score" });
   const reportedDenied = [];
+  // toolsUsed (panelist#278): every attempt's response goes through this, so a
+  // failed or unreporting call makes isolation.used null rather than partial.
+  const toolsUsed = createToolsUsedAccumulator();
 
   const byPersona = [];
   const modelRows = new Map();
@@ -542,6 +549,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs * 2 ** (attempt - 1)));
       }
       const res = await attemptCell(t);
+      toolsUsed.add(res);
       // Merge the gate's own denials (recorded by gate.check() calls, if the
       // adapter used it) with any the adapter self-reports via res.deniedToolCalls
       // — an adapter that enforces upstream of panelist still gets denials surfaced.
@@ -751,7 +759,7 @@ export async function scoreCandidate(candidate, personas, rubric, deps = {}) {
     // and denied carries both the gate's own denials and any the adapter
     // self-reports via res.deniedToolCalls. A wildcard grant throws — see
     // isolation.mjs's createToolGate/resolveEffectiveTools.
-    isolation: buildIsolationEnvelope(gate.tools, [...gate.denied, ...reportedDenied]),
+    isolation: buildIsolationEnvelope(gate.tools, [...gate.denied, ...reportedDenied], toolsUsed.used()),
   };
 }
 
@@ -848,7 +856,7 @@ function neutralFallback(candidate, panelistsFailed, rubric, shape = {}) {
     })(),
     fallback: true,
     honesty: USAGE_HEADER,
-    isolation: buildIsolationEnvelope([], []),
+    isolation: buildIsolationEnvelope([], [], []),
   };
 }
 

@@ -125,6 +125,24 @@ adapter from reaching a tool:
   before dispatching a tool call, or self-reports via
   `res.deniedToolCalls`, every attempted-but-denied call shows up in
   `isolation.denied` as `{ tool, reviewer, at }`.
+- **Reported tool use is recorded and checked (panelist#278).** An adapter's
+  `complete()` may return an optional `toolsUsed` field on an ok response: an
+  array of the tool ids it actually invoked during that call (non-string
+  entries are ignored; a non-array value counts as not reported). panelist
+  records the result in two envelope fields:
+  - `isolation.used` — the sorted, de-duplicated union of `toolsUsed` across
+    every model call in the run, **or `null`**. `null` means at least one model
+    call did not report `toolsUsed` (in `score`, a failed call counts as not
+    reported), so tool use is unknown. It is never written as `[]`: `[]` means
+    every call reported and none invoked a tool. A run with no model call (the
+    `score` neutral fallback) reports `[]`.
+  - `isolation.unexpected` — the entries of `used` that are not in
+    `isolation.tools`, by the same exact-match rule as `isToolGranted`. Always
+    an array; `[]` when `used` is `null`.
+
+  This is reporting only: a non-empty `unexpected` does not change a verdict,
+  a stop reason or an exit status. Adapters that do not set `toolsUsed` keep
+  working; their envelope reads `used: null`.
 - **Assembling a panel.** `isolation.mjs`'s `unionTools([...results])`
   accumulates the granted sets from several `spawn` calls into the
   panel-level `isolation.tools`; each per-call result still carries its own
@@ -147,9 +165,14 @@ cannot verify it. `isolation.tools` records what panelist *granted and
 forwarded*; it is not evidence about what the adapter *did*. In particular:
 
 - An adapter that ignores the forwarded allowlist (and exposes ambient tools to
-  the persona) is **not detectable by panelist**. The envelope still reads
-  `isolation: { tools: [], denied: [] }`, exactly as it would for a correctly
-  enforcing adapter.
+  the persona) and does not report `toolsUsed` is **not detectable by
+  panelist**. The envelope reads `isolation: { tools: [], denied: [], used:
+  null, unexpected: [] }`; `used: null` says tool use was not reported, which
+  is all panelist can say.
+- An adapter that reports `toolsUsed` lets panelist flag out-of-allowlist use
+  in `isolation.unexpected`. That flag is only as good as the report:
+  enforcing the allowlist and reporting `toolsUsed` honestly both remain the
+  adapter's job, and an adapter that under-reports looks clean.
 - An empty `isolation.denied` shows only that no denial was *reported* through
   the gate or `res.deniedToolCalls`. It does not show that no tool was used.
   `denied` is populated only by adapters that consult the gate or self-report.

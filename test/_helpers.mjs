@@ -120,3 +120,24 @@ export function variableScorer(model, chooser) {
     },
   };
 }
+
+/**
+ * A client that self-reports the tools it invoked via `res.toolsUsed`
+ * (panelist#278). `reports[i]` is the `toolsUsed` value for the i-th call
+ * (the last entry repeats); the sentinel `undefined` omits the field entirely
+ * (an adapter that does not report). `respond(prompt, i)` returns the raw text.
+ * @param {string} model
+ * @param {(prompt: string, i: number) => string} respond
+ * @param {Array<unknown>} reports
+ */
+export function toolsReportingClient(model, respond, reports) {
+  let i = 0;
+  return {
+    model,
+    async complete({ prompt }) {
+      const n = i++;
+      const report = reports[Math.min(n, reports.length - 1)];
+      return { ok: true, text: respond(prompt, n), model, ...(report === undefined ? {} : { toolsUsed: report }) };
+    },
+  };
+}

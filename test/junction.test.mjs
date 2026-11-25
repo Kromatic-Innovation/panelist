@@ -411,3 +411,39 @@ test("default max-turns cap is 1000 and invalid maxTurns throws", async () => {
   assert.equal(out.turns, DEFAULT_MAX_TURNS);
   await assert.rejects(() => runJunctionLoop(cycleGraph(1), READER, { spawnStrategy: "persistent", client, maxTurns: 0 }), /maxTurns/);
 });
+
+// ── Adapter-reported tool use (panelist#278) ─────────────────────────────────
+
+const CHAIN_WALK = [
+  { reaction: "hooked", decision: "intro" },
+  { reaction: "ok", decision: "body" },
+  { reaction: "done", decision: null },
+];
+
+function reportingScripted(reports) {
+  let i = 0;
+  return {
+    model: "scripted-reporting",
+    async complete() {
+      const n = i++;
+      const report = reports[n];
+      return { ok: true, text: JSON.stringify(CHAIN_WALK[n] ?? { reaction: "x", decision: BAIL }), model: "scripted-reporting", ...(report === undefined ? {} : { toolsUsed: report }) };
+    },
+  };
+}
+
+test("junction: isolation.used is the union across turns when every turn reports", async () => {
+  const client = reportingScripted([["lookup"], [], ["web", "lookup"]]);
+  const out = await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "persistent", client, tools: ["web"] });
+  assert.equal(out.turns, 3);
+  assert.deepEqual(out.isolation.used, ["lookup", "web"]);
+  assert.deepEqual(out.isolation.unexpected, ["lookup"]);
+});
+
+test("junction: isolation.used is null when any turn omits toolsUsed", async () => {
+  const client = reportingScripted([["lookup"], undefined, ["web"]]);
+  const out = await runJunctionLoop(chainGraph(), READER, { spawnStrategy: "respawn", client });
+  assert.equal(out.turns, 3);
+  assert.equal(out.isolation.used, null);
+  assert.deepEqual(out.isolation.unexpected, []);
+});

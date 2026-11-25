@@ -2,7 +2,7 @@ import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "../src/lib/spawn.mjs";
 import { registerPersonas, clearRegistry } from "../src/lib/register.mjs";
-import { fixedSpawn, mockClient, toolAttemptingClient } from "./_helpers.mjs";
+import { fixedSpawn, mockClient, toolAttemptingClient, toolsReportingClient } from "./_helpers.mjs";
 import reviewPack from "../packs/review/index.mjs";
 
 const artifact = "# My Project\nInstall: `npm i my-project`";
@@ -67,13 +67,13 @@ test("spawn rejects an unknown persona and a bad mode", async () => {
 test("default → denied: spawn grants no tools when opts.tools is omitted", async () => {
   const client = fixedSpawn("claude-x", { message: "reacting", dealKillers: [] });
   const out = await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
-  assert.deepEqual(out.isolation, { tools: [], denied: [] });
+  assert.deepEqual(out.isolation, { tools: [], denied: [], used: null, unexpected: [] });
 });
 
 test("explicit allowlist → permitted: opts.tools grants exactly the named tools", async () => {
   const client = fixedSpawn("claude-x", { message: "reacting", dealKillers: [] });
   const out = await spawn("drive-by-installer", { mode: "comment", artifact, tools: ["recall"] }, { client });
-  assert.deepEqual(out.isolation, { tools: ["recall"], denied: [] });
+  assert.deepEqual(out.isolation, { tools: ["recall"], denied: [], used: null, unexpected: [] });
 });
 
 test("a wildcard tool grant throws rather than silently opening everything", async () => {
@@ -97,7 +97,7 @@ test("an attempted-but-denied tool call surfaces in isolation.denied, not swallo
 test("granting the attempted tool clears the denial (the same client, now permitted)", async () => {
   const client = toolAttemptingClient("claude-x", "recall", { message: "reacting", dealKillers: [] });
   const out = await spawn("drive-by-installer", { mode: "comment", artifact, tools: ["recall"] }, { client });
-  assert.deepEqual(out.isolation, { tools: ["recall"], denied: [] });
+  assert.deepEqual(out.isolation, { tools: ["recall"], denied: [], used: null, unexpected: [] });
 });
 
 // ── PAN-09: injectable maxTokens/temperature (panelist#85) ──────────────────
@@ -234,4 +234,37 @@ test("a top-level JSON array reply is a parse failure, not a clean pass (panelis
   assert.equal(out.parseOk, false);
   assert.equal(out.dealKillers, null);
   assert.deepEqual(out.failuresByCause, { transport: 0, unparsable: 1 });
+});
+
+// ── Adapter-reported tool use (panelist#278) ─────────────────────────────────
+
+const reply = () => JSON.stringify({ message: "reacting", dealKillers: [] });
+
+test("toolsUsed outside the allowlist → isolation.used and isolation.unexpected both name it", async () => {
+  const client = toolsReportingClient("claude-x", reply, [["lookup"]]);
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact, tools: [] }, { client });
+  assert.deepEqual(out.isolation.used, ["lookup"]);
+  assert.deepEqual(out.isolation.unexpected, ["lookup"]);
+});
+
+test("toolsUsed inside the allowlist → isolation.unexpected is empty", async () => {
+  const client = toolsReportingClient("claude-x", reply, [["lookup"]]);
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact, tools: ["lookup"] }, { client });
+  assert.deepEqual(out.isolation.used, ["lookup"]);
+  assert.deepEqual(out.isolation.unexpected, []);
+});
+
+test("an adapter that omits toolsUsed → isolation.used is null, unexpected is []", async () => {
+  const client = toolsReportingClient("claude-x", reply, [undefined]);
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.equal(out.isolation.used, null);
+  assert.deepEqual(out.isolation.unexpected, []);
+});
+
+test("toolsUsed: [] → isolation.used is [], distinct from null", async () => {
+  const client = toolsReportingClient("claude-x", reply, [[]]);
+  const out = await spawn("drive-by-installer", { mode: "comment", artifact }, { client });
+  assert.deepEqual(out.isolation.used, []);
+  assert.notEqual(out.isolation.used, null);
+  assert.deepEqual(out.isolation.unexpected, []);
 });

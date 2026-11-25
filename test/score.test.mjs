@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { extractScore, score, scoreCandidate, decideVerdict, rankCandidatesWith } from "../src/lib/score.mjs";
 import { HONESTY_MARKER } from "../src/lib/honesty.mjs";
-import { fixedScorer, deadClient, toolAttemptingScorer, capturingScorer, variableScorer } from "./_helpers.mjs";
+import { fixedScorer, deadClient, toolAttemptingScorer, capturingScorer, variableScorer, toolsReportingClient } from "./_helpers.mjs";
 import reviewPack from "../packs/review/index.mjs";
 
 const RUBRIC = {
@@ -92,13 +92,13 @@ test("decideVerdict cuts on low overall and on kill-axis floor", () => {
 test("scoreCandidate isolation defaults to [] when deps.tools is omitted", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
   const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
-  assert.deepEqual(res.isolation, { tools: [], denied: [] });
+  assert.deepEqual(res.isolation, { tools: [], denied: [], used: null, unexpected: [] });
 });
 
 test("scoreCandidate isolation reflects an explicit deps.tools grant", async () => {
   const panel = [fixedScorer("claude-3-5-sonnet", GOOD), fixedScorer("gpt-4o", GOOD)];
   const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, tools: ["recall"] });
-  assert.deepEqual(res.isolation, { tools: ["recall"], denied: [] });
+  assert.deepEqual(res.isolation, { tools: ["recall"], denied: [], used: null, unexpected: [] });
 });
 
 test("scoreCandidate throws on a wildcard deps.tools grant instead of silently collapsing to []", async () => {
@@ -127,20 +127,20 @@ test("explicit allowlist → actually forwarded to the adapter AND permitted", a
   const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, tools: ["recall"] });
   assert.equal(captured.length, 1);
   assert.deepEqual(captured[0].tools, ["recall"], "complete() must receive the granted tools array");
-  assert.deepEqual(res.isolation, { tools: ["recall"], denied: [] });
+  assert.deepEqual(res.isolation, { tools: ["recall"], denied: [], used: null, unexpected: [] });
 
   // Same allowlist, but the adapter actually reaches for the granted tool —
   // must be permitted (no denial), proving the forwarded array is load-bearing.
   const grantedPanel = [toolAttemptingScorer("claude-x", "recall", GOOD)];
   const grantedRes = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel: grantedPanel, tools: ["recall"] });
-  assert.deepEqual(grantedRes.isolation, { tools: ["recall"], denied: [] });
+  assert.deepEqual(grantedRes.isolation, { tools: ["recall"], denied: [], used: null, unexpected: [] });
 });
 
 test("heuristic-fallback path still emits {tools:[],denied:[]} even when deps.tools is granted", async () => {
   const panel = [deadClient("claude-x"), deadClient("gpt-y")];
   const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel, tools: ["recall"] });
   assert.equal(res.fallback, true);
-  assert.deepEqual(res.isolation, { tools: [], denied: [] });
+  assert.deepEqual(res.isolation, { tools: [], denied: [], used: [], unexpected: [] });
 });
 
 // ── PAN-09: injectable maxTokens/temperature (panelist#85) ──────────────────
@@ -658,4 +658,45 @@ test("rank sorts finitely when an axis is missing everywhere", async () => {
   const { shortlist } = await rankCandidatesWith([cand, { text: "b" }], reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
   assert.equal(shortlist.length, 2);
   assert.ok(Number.isFinite(shortlist[0].evaluation.aggregate.overall));
+});
+
+// ── Adapter-reported tool use (panelist#278) ─────────────────────────────────
+
+const goodReply = () => JSON.stringify({ ...GOOD, note: "mock" });
+
+test("score: isolation.used is the union across a multi-persona panel when every task reports", async () => {
+  // 2 personas x 2 panelists = 4 tasks; each panelist reports a different tool per call.
+  const panel = [
+    toolsReportingClient("claude-x", goodReply, [["lookup"], ["web"]]),
+    toolsReportingClient("gpt-y", goodReply, [[], ["lookup"]]),
+  ];
+  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel, tools: ["web"] });
+  assert.equal(res.panelSize, 4);
+  assert.deepEqual(res.isolation.used, ["lookup", "web"]);
+  assert.deepEqual(res.isolation.unexpected, ["lookup"]);
+});
+
+test("score: isolation.used is null when any task omits toolsUsed", async () => {
+  const panel = [
+    toolsReportingClient("claude-x", goodReply, [["lookup"]]),
+    toolsReportingClient("gpt-y", goodReply, [["web"], undefined]),
+  ];
+  const res = await score(cand, reviewPack.slice(0, 2), RUBRIC, { retries: 0, panel });
+  assert.equal(res.isolation.used, null);
+  assert.deepEqual(res.isolation.unexpected, []);
+});
+
+test("score: a failed call counts as not reported (used is null, not a partial union)", async () => {
+  const panel = [toolsReportingClient("claude-x", goodReply, [["lookup"]]), deadClient("gpt-y")];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
+  assert.notEqual(res.fallback, true);
+  assert.equal(res.isolation.used, null);
+});
+
+test("score: the neutral fallback path reports used: [] and unexpected: []", async () => {
+  const panel = [deadClient("claude-x"), deadClient("gpt-y")];
+  const res = await score(cand, reviewPack.slice(0, 1), RUBRIC, { retries: 0, panel });
+  assert.equal(res.fallback, true);
+  assert.deepEqual(res.isolation.used, []);
+  assert.deepEqual(res.isolation.unexpected, []);
 });

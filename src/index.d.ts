@@ -34,10 +34,10 @@ export interface Rubric {
   [key: string]: unknown;
 }
 
-/** An injected model client. `complete` returns the model's text reply. */
+/** An injected model client. `complete` returns the model's text reply (see ModelResponse). */
 export interface ModelClient {
   model?: string;
-  complete: (...args: any[]) => Promise<any> | any;
+  complete: (...args: any[]) => Promise<ModelResponse | { ok: false; reason?: string } | any> | any;
   temperature?: number;
   [key: string]: unknown;
 }
@@ -55,6 +55,26 @@ export type RegisterSource = Persona[] | Persona | PersonaSource;
 export interface IsolationEnvelope {
   tools: string[];
   denied: ToolDenial[];
+  /** Adapter-reported tools actually invoked (sorted, de-duplicated), or `null` when not reported (panelist#278). */
+  used: string[] | null;
+  /** Entries of `used` not granted by `tools`. Always an array; `[]` when `used` is `null`. */
+  unexpected: string[];
+}
+
+/** An ok response from `ModelClient.complete` (the adapter contract). */
+export interface ModelResponse {
+  ok: true;
+  text: string;
+  model?: string;
+  /** Attempted-but-denied tool calls the adapter self-reports. */
+  deniedToolCalls?: Array<string | { tool: string; at?: string }>;
+  /** Tool ids the adapter actually invoked during this call (panelist#278). Omit when not tracked. */
+  toolsUsed?: string[];
+}
+
+export interface ToolsUsedAccumulator {
+  add: (res: unknown) => void;
+  used: () => string[] | null;
 }
 
 export interface ToolDenial {
@@ -365,5 +385,7 @@ export function resolveEffectiveTools(requested?: string[] | null): string[];
 export function isToolGranted(toolId: unknown, effectiveTools: string[]): boolean;
 export function recordDenial(toolId: string, reviewer?: string | null, at?: string): ToolDenial;
 export function createToolGate(opts?: { tools?: string[] | null; reviewer?: string }): ToolGate;
-export function buildIsolationEnvelope(effectiveTools?: string[], denied?: ToolDenial[]): IsolationEnvelope;
+export function buildIsolationEnvelope(effectiveTools?: string[], denied?: ToolDenial[], used?: string[] | null): IsolationEnvelope;
+export function normalizeReportedToolsUsed(res: unknown): string[] | null;
+export function createToolsUsedAccumulator(): ToolsUsedAccumulator;
 export function unionTools(records?: Array<{ isolation?: { tools?: string[] } }>): string[];
