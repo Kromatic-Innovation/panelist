@@ -242,14 +242,20 @@ const ZERO_WIDTH_SPACE = "​";
  * `"""` as a substring. This is deterministic (no random delimiter — tests must
  * be reproducible) and visually lossless: a model (and a human) still sees the
  * same quote characters, just with an invisible break inserted between them.
- * After neutralization, the ONLY two `"""` substrings in the returned string
- * are the intended opening and closing fences.
+ * A leading or trailing `"` is also separated from its fence by a zero-width
+ * space, so edge quotes cannot merge with the fence into a longer run.
+ * After neutralization, the returned string starts with exactly `"""` followed
+ * by a non-quote character, ends likewise, and contains no other `"""`.
  *
  * @param {*} text  untrusted text (coerced to a string; null/undefined -> "").
  * @returns {string} `"""<neutralized text>"""`
  */
 export function fenceArtifact(text) {
-  const safe = String(text ?? "").replace(/"{3,}/g, (m) => m.split("").join(ZERO_WIDTH_SPACE));
+  let safe = String(text ?? "").replace(/"{3,}/g, (m) => m.split("").join(ZERO_WIDTH_SPACE));
+  // Edge quotes would merge with the adjacent fence (`"""` + `"x` reads as a run of 4),
+  // moving the fence boundary. Pad a leading/trailing `"` with a zero-width space.
+  if (safe.startsWith('"')) safe = ZERO_WIDTH_SPACE + safe;
+  if (safe.endsWith('"')) safe += ZERO_WIDTH_SPACE;
   return `"""${safe}"""`;
 }
 

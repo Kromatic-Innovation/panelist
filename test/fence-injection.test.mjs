@@ -130,3 +130,37 @@ test("junction plane: a function-resolved content value is fenced safely too", (
   const view = renderJunctionView(junction, { history: [] });
   assert.equal(countFences(view.text), 2);
 });
+
+// ── Edge quotes: a leading/trailing `"` must not merge with the fence ───────
+//
+// `countFences` above counts NON-overlapping matches, so `""""x` (fence + a
+// leading quote) reads as one fence. These tests count OVERLAPPING `"""` starts
+// and check the fence boundaries directly.
+
+function overlappingFences(s) {
+  return (s.match(/(?=""")/g) || []).length;
+}
+
+for (const edge of ['"', '""', '"""', '""""', '"""""']) {
+  for (const [label, text] of [
+    ["leading", `${edge}payload`],
+    ["trailing", `payload${edge}`],
+    ["both", `${edge}payload${edge}`],
+    ["only", edge],
+  ]) {
+    test(`fenceArtifact: ${label} ${JSON.stringify(edge)} cannot merge with the fence`, () => {
+      const fenced = fenceArtifact(text);
+      assert.equal(overlappingFences(fenced), 2, "exactly the real opening and closing fence");
+      assert.ok(fenced.startsWith('"""') && fenced[3] !== '"', "opening fence is exactly three quotes");
+      assert.ok(fenced.endsWith('"""') && fenced[fenced.length - 4] !== '"', "closing fence is exactly three quotes");
+      assert.equal(fenced.slice(3, -3).replace(/​/g, ""), text, "content preserved modulo zero-width spaces");
+    });
+  }
+}
+
+test("score plane: buildEvalPrompt keeps the fence intact for edge-quote artifacts", () => {
+  for (const text of ['"leading', 'trailing"', '""both""']) {
+    const prompt = buildEvalPrompt({ persona: PERSONA, candidate: { text, channel: "email", format: "plain" }, rubric: RUBRIC, intro: "intro" });
+    assert.equal(overlappingFences(prompt), 2, `fence integrity for ${JSON.stringify(text)}`);
+  }
+});
