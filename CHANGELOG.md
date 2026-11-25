@@ -17,11 +17,53 @@ what callers must change, and a **Breaking.** banner under its version
 heading. Search this file for `### Breaking` before upgrading across a
 minor version.
 
-## [Unreleased]
+## [0.5.0] - 2026-11-25
 
 **Breaking.** Node.js 22 or newer is now required, rubrics with an unknown
-`killAxes` entry now throw, and an axis with no values now aggregates to `null`
-instead of `0` (see **Breaking** below).
+`killAxes` entry now throw, an axis with no values now aggregates to `null`
+instead of `0`, and `spawn()` / `runPersona()` `dealKillers` is `null` when the
+reply does not parse (see **Breaking** below).
+
+**Summary.** This minor release is about verdict integrity: a `score()` result
+now says whether the panel it describes was complete, which personas and axes
+are missing, why the verdict came out as it did, and a redacted sample of what
+failed. It also drops Node 20 and lands the 2026-11-24 audit fixes.
+
+- **Breaking and behaviour changes.** Node.js `>=22` is required. A `killAxes`
+  entry not in `axes` throws from `normalizeRubric` / `score()`. An axis with no
+  values aggregates to `null` (no longer `0`), and a missing kill axis no longer
+  cuts on its own. `dealKillers` is `null` on an unparsable reply. `score()`
+  now retries a failing persona-by-model cell (up to 3 adapter calls by
+  default). Registered personas are deep-frozen copies, so mutating one throws
+  in strict mode. `runJunctionLoop` rejects a junction named `"bail"`,
+  `__proto__`, `constructor` or `prototype`. A custom register `usage` string
+  is now prepended to the standard honesty caveat instead of replacing it.
+  Default verdict rules are otherwise unchanged.
+- **New result fields.** Every `score()` result carries `complete`,
+  `incompleteReason`, `attempts`, `personasMissing`, `verdictReason`,
+  `axesMissing` and `failureSample`. `spawn()`, `runPersona()`, `score()` and
+  `runJunctionLoop()` return `isolation.used` and `isolation.unexpected`
+  (adapter-reported tool use). New opt-in rubric setting `requireEveryPersona`.
+  TypeScript declarations (`src/index.d.ts`) now ship.
+- **Experimental surface.** None.
+- **Security-relevant changes.** `fenceArtifact()` keeps edge quotes from
+  merging with the prompt fence, and junction ids can no longer write to
+  `Object.prototype`. `failureSample` reasons are truncated and redacted (no
+  reply text, echoed prompt or artifact text replaced with `[redacted]`). The
+  tool-isolation docs now say plainly that the adapter enforces the allowlist.
+- **Upgrade steps.**
+  1. Upgrade to Node.js 22 or newer before installing 0.5.0.
+  2. Fix or remove any rubric `killAxes` entry that does not name an axis in
+     `axes`.
+  3. Handle `null` in `aggregate[axis]` and in `dealKillers` (check
+     `result.parseOk` first).
+  4. Read `complete` / `incompleteReason` and `personasMissing` /
+     `axesMissing` before trusting a verdict. Do not discard an incomplete
+     result: it is the record of what the panel could and could not cover.
+  5. If you meter adapter calls or your adapter is not idempotent, size for
+     the retries or pass `deps.retries: 0`.
+  6. Stop mutating personas returned by `getPersona` / `getPersonas`; register
+     a new record instead. Rename any junction keyed `"bail"`.
 
 ### Breaking
 
