@@ -21,8 +21,14 @@ minor version.
 
 **Breaking.** Node.js 22 or newer is now required, rubrics with an unknown
 `killAxes` entry now throw, an axis with no values now aggregates to `null`
-instead of `0`, and `spawn()` / `runPersona()` `dealKillers` is `null` when the
-reply does not parse (see **Breaking** below).
+instead of `0`, `spawn()` / `runPersona()` `dealKillers` is `null` when the
+reply does not parse, registered personas are frozen (mutating one throws),
+`runJunctionLoop` rejects a junction named `"bail"`, `__proto__`,
+`constructor` or `prototype` and a junction `cost` that is not a finite
+number above 0, `score()` retries a failing cell (up to 3 adapter calls by
+default), a custom register `usage` string no longer replaces the standard
+honesty caveat, and `providerOf` / `crossModel` can now report a single-vendor
+panel as single-vendor (see **Breaking** below).
 
 **Summary.** This minor release is about verdict integrity: a `score()` result
 now says whether the panel it describes was complete, which personas and axes
@@ -102,6 +108,61 @@ failed. It also drops Node 20, ships TypeScript declarations
   no longer cuts on its own. **Upgrade step:** code that reads `aggregate[axis]`
   must handle `null`.
 
+- **Registered personas are deep-frozen copies
+  ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
+  `registerPersonas` used to store the caller's own object, and `getPersona` /
+  `getPersonas` returned it, so code could edit a registered persona in
+  place. Each record is now `structuredClone`d and deep-frozen at
+  registration, so assigning to a returned persona throws in strict mode
+  (every ESM module). **Upgrade step:** copy a returned persona before
+  changing it, or register a new record. Detail under **Changed**.
+
+- **`runJunctionLoop` rejects reserved junction ids
+  ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
+  A graph with a junction keyed `"bail"`, `__proto__`, `constructor` or
+  `prototype` used to run (and trace aggregation let the last three write to
+  `Object.prototype`). It now throws. **Upgrade step:** rename the junction.
+  Detail under **Changed** and **Security**.
+
+- **`runJunctionLoop` rejects a junction `cost` that is not a finite number
+  above 0
+  ([#236](https://github.com/Kromatic-Innovation/panelist/issues/236)).**
+  A `cost` of `0`, a negative number or `NaN` used to make the walk loop
+  forever; it now throws when that junction is reached. `Infinity` and
+  non-number values throw too. An omitted `cost` still defaults to 1.
+  **Upgrade step:** give every junction a finite `cost` above 0, or omit it.
+  Detail under **Fixed**.
+
+- **`score()` retries a failing persona-by-model cell
+  ([#246](https://github.com/Kromatic-Innovation/panelist/issues/246)).**
+  A failed adapter call used to be final. `score()` now makes up to 3 adapter
+  calls for a failing cell by default (`deps.retries` defaults to `2`).
+  Verdicts are unchanged, but call counts and spend can rise, and a
+  non-idempotent adapter is called again. **Upgrade step:** size budgets for
+  the extra calls, or pass `deps.retries: 0` to keep the old count. Detail
+  under **Changed**.
+
+- **A custom register `usage` string no longer replaces the honesty caveat
+  ([#242](https://github.com/Kromatic-Innovation/panelist/issues/242)).**
+  `registerPersonas({ usage })` used to make the custom string the whole
+  stamped `honesty` value. The stamped value is now the custom string followed
+  by the standard caveat, unless the string already contains the marker
+  (`"not validation"`). **Upgrade step:** code that compares `honesty` to the
+  exact custom string must expect the caveat after it. `getUsage()` still
+  returns the raw string. Detail under **Changed**.
+
+- **`providerOf` / `crossModel` can report a single-vendor panel as
+  single-vendor
+  ([#235](https://github.com/Kromatic-Innovation/panelist/issues/235)).**
+  `providerOf` used to return the full id for an unrecognized model, so
+  panels such as `[gpt-4o, o4-mini]` or `[mistral-large, mistral-small]`
+  counted as several providers and reported `crossModel: true`. More vendors
+  are now recognized, a `vendor/`-prefixed id maps to its prefix, and any
+  other unknown id maps to `"unknown"`, so these panels now report
+  `crossModel: false`. **Upgrade step:** a gate that requires `crossModel:
+  true` can now stop such a panel; check your panels still span two vendors.
+  Detail under **Fixed**.
+
 ### Added
 
 - **The `isolation` envelope records adapter-reported tool use
@@ -151,9 +212,9 @@ failed. It also drops Node 20, ships TypeScript declarations
   entries in task order, reflecting each failed cell's final attempt. Reasons
   are truncated to 200 characters, never include reply text, and have any
   echoed prompt or artifact text replaced with `[redacted]`.
-  `failuresByCause` counts are unchanged. `FAILURE_SAMPLE_LIMIT` and
-  `FAILURE_REASON_MAX_CHARS` are exported from `src/lib/score.mjs`. See
-  `docs/invocation-contract.md`.
+  `failuresByCause` counts are unchanged. The limits (5 entries, 200
+  characters) are internal constants in `src/lib/score.mjs`, not exports of
+  the package entry. See `docs/invocation-contract.md`.
 
 - **Registered personas are now frozen copies, and a junction may not be named
   `"bail"` ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
@@ -213,7 +274,7 @@ failed. It also drops Node 20, ships TypeScript declarations
   `runJunctionLoop` now accepts only a finite `cost > 0` (omitted still
   defaults to 1); anything else, including `Infinity`, throws when that
   junction is reached, before a turn is spent. A new hard turn cap,
-  `opts.maxTurns` (default 1000, `DEFAULT_MAX_TURNS`), ends a walk with the
+  `opts.maxTurns` (default 1000), ends a walk with the
   new `stopReason: "max-turns"`. Documented in `docs/junction-contract.md`.
 - **`drift-check.mjs` auto-ran its CLI and called `process.exit()` inside any
   consumer script that happened to be named `drift-check.mjs`
@@ -222,8 +283,10 @@ failed. It also drops Node 20, ships TypeScript declarations
   entry module (realpath-compared against `process.argv[1]`, which may be
   absent), so `import { checkRecords } from "panelist"` from a consumer's
   `scripts/drift-check.mjs` no longer prints panelist's report or exits early.
-  `npm run drift` is unchanged and still exits non-zero on drift. New export:
-  `isEntryModule`; `main()` now accepts optional injected packs.
+  `npm run drift` is unchanged and still exits non-zero on drift. The
+  entry-module check (`isEntryModule`) is internal to `drift-check.mjs`, not
+  exported from the package entry; `main()` now accepts optional injected
+  packs.
 
 - **`calibratePersonas` no longer reports confident correlations from missing
   or non-numeric data
@@ -262,8 +325,9 @@ failed. It also drops Node 20, ships TypeScript declarations
   junction content is read.
 - **`.github/workflows` use one `actions/setup-node` pin
   ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
-  `release.yml` already matches the v7.1.0 pin used by the other workflows;
-  only its comment spacing was uneven, now aligned.
+  `release.yml` moved `actions/setup-node` from v7.0.0 (`8207627`) to v7.1.0
+  (`949feb2`), the pin the other workflows already used, so every workflow
+  now runs the same setup-node release.
 
 - **A custom register `usage` string no longer replaces the standard honesty
   caveat; it is now appended to
@@ -272,8 +336,9 @@ failed. It also drops Node 20, ships TypeScript declarations
   `honesty` value is the custom text first, then the standard caveat, so
   `assertHonestyStamped` is `ok: true` and `formatPanelSummary` carries the
   marker. A custom string that already contains the marker (`"not
-  validation"`) is used as-is, not double-stamped. New export `composeUsage`
-  from `honesty.mjs`. `getUsage()` still returns the raw registered string.
+  validation"`) is used as-is, not double-stamped. The composition is done by
+  `composeUsage`, an internal helper in `honesty.mjs` that the package entry
+  does not export. `getUsage()` still returns the raw registered string.
 
 ### Security
 

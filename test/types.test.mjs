@@ -37,3 +37,23 @@ test("package.json wires types before default", () => {
   assert.equal(pkg.exports["."].types, "./src/index.d.ts");
   assert.ok(pkg.files.includes("src"));
 });
+
+// panelist#285: these four helpers are internal. The docs no longer call them
+// exports, so neither the package entry nor index.d.ts may expose them. If one
+// is ever promoted to the public API, update CHANGELOG/docs and this test together.
+test("composeUsage, isEntryModule, DEFAULT_MAX_TURNS and FAILURE_SAMPLE_LIMIT stay internal (panelist#285)", async () => {
+  const internal = {
+    composeUsage: "../src/lib/honesty.mjs",
+    isEntryModule: "../src/lib/drift-check.mjs",
+    DEFAULT_MAX_TURNS: "../src/lib/junction-constants.mjs",
+    FAILURE_SAMPLE_LIMIT: "../src/lib/score.mjs",
+  };
+  const declared = declaredValueNames(dts);
+  for (const [name, mod] of Object.entries(internal)) {
+    assert.ok(!(name in entry), `${name} must not be exported from src/index.mjs`);
+    assert.ok(!declared.has(name), `${name} must not be declared in src/index.d.ts`);
+    const lib = await import(mod);
+    assert.notEqual(lib[name], undefined, `${name} should still exist in ${mod}`);
+  }
+  assert.deepEqual(Object.keys(pkg.exports).filter((k) => k.includes("lib")), [], "the exports map must not open src/lib/*");
+});

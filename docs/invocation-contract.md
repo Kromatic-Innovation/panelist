@@ -301,7 +301,7 @@ as a judgment on the candidate: keep it for a later retry or for human review.
 
 **Failure reasons (panelist#249).** Counts alone do not say why cells failed,
 so every result (live path, built-in fallback and custom `deps.fallback`) also
-carries `failureSample`: up to `FAILURE_SAMPLE_LIMIT` (5) entries of
+carries `failureSample`: up to 5 entries of
 `{ persona, model, cause, reason }`, in task order (persona-major, then panel
 order). `persona` is the id form used in `scores.byPersona[].persona`; `model`
 is the reply's `model` if present, else the requested `panelist.model`; `cause`
@@ -309,7 +309,7 @@ is `"transport"` or `"unparsable"`, the same buckets as `failuresByCause`
 (whose counts are unchanged). `reason` is the thrown error's message, the
 adapter's `res.reason`, or a fixed string (`"threw"`, `"no usable text"`,
 `"unparsable reply"`). It reflects the **final** attempt of each failed cell
-when retries are on, and is truncated to `FAILURE_REASON_MAX_CHARS` (200)
+when retries are on, and is truncated to 200
 characters including a trailing `…`. Reasons never contain reply text. Any
 occurrence of the prompt or the candidate text inside an adapter-supplied
 reason is replaced with `[redacted]` before truncation, and a non-string reason

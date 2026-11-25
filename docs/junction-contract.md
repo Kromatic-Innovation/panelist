@@ -99,7 +99,7 @@ last offers none. A chain is just a graph; no special engine mode is needed.
    per-junction at engagement, not an up-front graph scan, so the engine still never
    reads a junction the reader has not reached.)
 4. **A hard turn cap backstops the budget.** `opts.maxTurns` (a positive integer,
-   default `1000`, exported as `DEFAULT_MAX_TURNS`) caps the number of turns in a
+   default `1000`) caps the number of turns in a
    walk. Hitting it ends the run with `stopReason: "max-turns"`, distinct from
    `"budget-exhausted"` (a budget that runs out first, or at the same turn, wins).
    The other stop reasons are `"bail"`, `"terminal"` and `"invalid-decision"`.
