@@ -134,8 +134,11 @@ adapter from reaching a tool:
     every model call in the run, **or `null`**. `null` means at least one model
     call did not report `toolsUsed` (in `score`, a failed call counts as not
     reported), so tool use is unknown. It is never written as `[]`: `[]` means
-    every call reported and none invoked a tool. A run with no model call (the
-    `score` neutral fallback) reports `[]`.
+    every call reported and none invoked a tool. The `score` neutral fallback
+    (no persona produced a usable score) always reports `used: []` and
+    `unexpected: []`, the same fixed envelope it uses for `tools` and `denied`.
+    On that path the envelope does not reflect the model calls that were
+    attempted, so do not read its `[]` as evidence that no tool ran.
   - `isolation.unexpected` — the entries of `used` that are not in
     `isolation.tools`, by the same exact-match rule as `isToolGranted`. Always
     an array; `[]` when `used` is `null`.
