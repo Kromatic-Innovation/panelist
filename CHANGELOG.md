@@ -217,6 +217,21 @@ instead of `0` (see **Breaking** below).
   validation"`) is used as-is, not double-stamped. New export `composeUsage`
   from `honesty.mjs`. `getUsage()` still returns the raw registered string.
 
+### Security
+
+- **Prompt fence hardening for edge quotes.** `fenceArtifact()` now separates a
+  leading or trailing `"` in the fenced text from the `"""` fence with a
+  zero-width space, so quotes at the edges of an artifact can no longer merge
+  with the fence and shift its boundary. The fence-injection tests now count
+  overlapping `"""` and cover leading/trailing `"`, `""` and longer runs.
+
+- **Prototype-pollution hardening for junction ids.**
+  `aggregateJunctionTraces()` now accumulates drop-off and per-junction counts
+  in `Map`s and emits plain objects, so ids such as `__proto__` or
+  `constructor` can no longer write to `Object.prototype`. `runJunctionLoop()`
+  also rejects a graph that names a junction `__proto__`, `constructor` or
+  `prototype`. A test asserts `Object.prototype` is untouched.
+
 ### Docs
 
 - **Tool-isolation threat-model note.** `docs/invocation-contract.md` (Tool

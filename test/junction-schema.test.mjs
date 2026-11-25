@@ -248,3 +248,45 @@ test("aggregateJunctionTraces tolerates an empty batch and null entries", () => 
   assert.equal(typeof h1, "string");
   assert.equal(typeof h2, "string");
 });
+
+// ---- prototype-pollution hardening -------------------------------------------
+
+test("aggregateJunctionTraces: reserved junction ids do not touch Object.prototype", () => {
+  const reserved = ["__proto__", "constructor", "prototype", "toString", "hasOwnProperty"];
+  const traces = reserved.map((id) => ({
+    entryJunction: id,
+    junctionTrace: [{ junction: id, engagement: "kept", reaction: "r", decision: null }],
+    dropOff: { stoppedAt: id, reason: "x" },
+  }));
+  const before = Object.getOwnPropertyNames(Object.prototype).sort();
+  const out = aggregateJunctionTraces(traces);
+  assert.deepEqual(Object.getOwnPropertyNames(Object.prototype).sort(), before);
+  assert.equal(Object.getPrototypeOf(Object.prototype), null);
+  assert.equal({}.visits, undefined);
+  assert.equal({}.kept, undefined);
+  assert.equal({}.polluted, undefined);
+  for (const id of reserved) {
+    assert.equal(Object.hasOwn(out.perJunction, id), true, `${id} is an own key of perJunction`);
+    assert.equal(out.perJunction[id].visits, 1);
+    assert.equal(out.perJunction[id].kept, 1);
+    assert.equal(out.dropOff[id], 1);
+  }
+});
+
+test("aggregateJunctionTraces: an engagement named like an Object.prototype member is ignored", () => {
+  const out = aggregateJunctionTraces([
+    { entryJunction: "a", junctionTrace: [{ junction: "a", engagement: "constructor" }], dropOff: { stoppedAt: "a", reason: "x" } },
+  ]);
+  assert.deepEqual({ ...out.perJunction.a }, { visits: 1, kept: 0, skimmed: 0, bailed: 0 });
+});
+
+test("runJunctionLoop rejects reserved junction names (JSON-parsed graph with own __proto__)", async () => {
+  for (const id of ["__proto__", "constructor", "prototype"]) {
+    const junctions = JSON.parse(`{"hook": {"content": "H"}, ${JSON.stringify(id)}: {"content": "X"}}`);
+    await assert.rejects(
+      runJunctionLoop({ entry: "hook", junctions }, {}, { client: scriptedClient([]) }),
+      /reserved name/,
+    );
+  }
+  assert.equal({}.content, undefined);
+});
