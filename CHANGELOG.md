@@ -17,6 +17,12 @@ what callers must change, and a **Breaking.** banner under its version
 heading. Search this file for `### Breaking` before upgrading across a
 minor version.
 
+## [Unreleased]
+
+### Changed
+
+- README: a one-line `npm i panelist` install now sits directly under the hero image, before the first callout, instead of after four paragraphs and two long callouts (panelist#288).
+
 ## [0.5.0] - 2026-11-25
 
 **Breaking.** Node.js 22 or newer is now required, rubrics with an unknown
