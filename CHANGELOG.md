@@ -321,8 +321,9 @@ failed. It also drops Node 20 and lands the 2026-11-24 audit fixes.
   junction content is read.
 - **`.github/workflows` use one `actions/setup-node` pin
   ([#251](https://github.com/Kromatic-Innovation/panelist/issues/251)).**
-  `release.yml` already matches the v7.1.0 pin used by the other workflows;
-  only its comment spacing was uneven, now aligned.
+  `release.yml` moved `actions/setup-node` from v7.0.0 (`8207627`) to v7.1.0
+  (`949feb2`), the pin the other workflows already used, so every workflow
+  now runs the same setup-node release.
 
 - **A custom register `usage` string no longer replaces the standard honesty
   caveat; it is now appended to
