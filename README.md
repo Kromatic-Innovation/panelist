@@ -6,6 +6,8 @@
 
 ![panelist: three panelists reading a draft with exit-doors above their heads, a moderator directing the session](docs/assets/hero.png)
 
+**Install:** `npm i panelist` (Node.js 22+; you bring your own model client, see [Install](#install)).
+
 **What panelist is:** Synthetic user panels for any artifact, run across multiple model providers to correct for self-preference bias. Most tools of this kind return a warmth score, which invites "the AI loved it" misuse. Panelist models behavior instead: the exact point a persona quits, dismisses, or refuses to click like.
 
 **Differentiator:** panelist's primary output is a **deal-killer / cut-list**: the exact point a persona would quit, dismiss, refuse to click, or refuse to forward — abandonment is behavioral and far more reliably simulable than affect. panelist reports whether a panel spans ≥2 model providers (fighting same-model self-preference bias) via a `crossModel` flag on every result — the caller composes the panel and should check the flag if that property matters, since a single-provider panel still runs to completion. Personas differ by _what makes them quit_ rather than demographics, and every output auto-stamps the honesty caveat that this is a pre-filter, not user research.
