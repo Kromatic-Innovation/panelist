@@ -27,7 +27,9 @@ reply does not parse (see **Breaking** below).
 **Summary.** This minor release is about verdict integrity: a `score()` result
 now says whether the panel it describes was complete, which personas and axes
 are missing, why the verdict came out as it did, and a redacted sample of what
-failed. It also drops Node 20 and lands the 2026-11-24 audit fixes.
+failed. It also drops Node 20, ships TypeScript declarations
+(`src/index.d.ts`), makes registered personas frozen copies, and lands the
+2026-11-24 audit fixes.
 
 - **Breaking and behaviour changes.** Node.js `>=22` is required. A `killAxes`
   entry not in `axes` throws from `normalizeRubric` / `score()`. An axis with no
