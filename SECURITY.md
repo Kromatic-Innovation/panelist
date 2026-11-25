@@ -45,3 +45,16 @@ unmerged code is rejected rather than released. Weaknesses in that pipeline —
 ways to publish a `panelist` release without those assertions holding, or to
 obtain the publishing identity — are security issues and should be reported
 by the same private process above.
+
+## Threat model: tool isolation
+
+panelist resolves a deny-by-default tool allowlist, forwards it to the
+adapter you inject, and reports it in the result (`isolation.tools`,
+`isolation.denied`). panelist bundles no provider layer, so **enforcing the
+allowlist is the adapter's responsibility**, and panelist cannot detect an
+adapter that ignores it: the reported envelope looks the same either way. The
+envelope shows what was granted and any denials the adapter reported. It does
+not prove that no tool was reachable or used. Use an adapter you trust and
+verify its enforcement yourself. See
+[Tool isolation](docs/invocation-contract.md#tool-isolation-panelist72) in the
+invocation contract for details.

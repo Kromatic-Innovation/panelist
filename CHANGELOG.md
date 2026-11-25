@@ -219,6 +219,12 @@ instead of `0` (see **Breaking** below).
 
 ### Docs
 
+- **Tool-isolation threat-model note.** `docs/invocation-contract.md` (Tool
+  isolation) and `SECURITY.md` now state that enforcing the tool allowlist is
+  the adapter's responsibility, that panelist cannot detect an adapter that
+  ignores it, and what the `isolation` envelope can and cannot show (it records
+  what was granted and any reported denials, not what the adapter actually did).
+
 - **Tool-isolation wording corrected, and a 0.4.2 semver note
   ([#243](https://github.com/Kromatic-Innovation/panelist/issues/243)).**
   The README and `docs/invocation-contract.md` no longer claim isolation is
