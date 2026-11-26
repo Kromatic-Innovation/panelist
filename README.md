@@ -8,6 +8,8 @@
 
 **Install:** `npm i panelist` (Node.js 22+; you bring your own model client, see [Install](#install)).
 
+**Status:** in maintenance. Bug and security fixes only, best effort; no new features are planned. See [Status](#status).
+
 **What panelist is:** Synthetic user panels for any artifact, run across multiple model providers to correct for self-preference bias. Most tools of this kind return a warmth score, which invites "the AI loved it" misuse. Panelist models behavior instead: the exact point a persona quits, dismisses, or refuses to click like.
 
 **Differentiator:** panelist's primary output is a **deal-killer / cut-list**: the exact point a persona would quit, dismiss, refuse to click, or refuse to forward — abandonment is behavioral and far more reliably simulable than affect. panelist reports whether a panel spans ≥2 model providers (fighting same-model self-preference bias) via a `crossModel` flag on every result — the caller composes the panel and should check the flag if that property matters, since a single-provider panel still runs to completion. Personas differ by _what makes them quit_ rather than demographics, and every output auto-stamps the honesty caveat that this is a pre-filter, not user research.
@@ -17,6 +19,16 @@
 > ⚠️ **What panelist is and is not for.** A synthetic persona is a _model_ of a customer, and your model of the customer is wrong — that is why you talk to real people. panelist is legitimate as a **drafting aid**, a **cheap pre-filter** to kill obviously-weak drafts before spending a human's attention, and a way to catch obvious misses. It is **not** evidence about real readers, **not** a substitute for talking to them, and **not** validation. "Our personas responded well to this" is a sentence this tool is designed to make hard to write.
 
 > **Persona tool isolation: deny by default, allowlist forwarded and reported (panelist#72/#75).** "A persona sees the artifact and nothing else" is the goal, and panelist gives the adapter what it needs to hold it: every execution plane — `spawn`/`runPersona`, `score`/`scoreCandidate`, and the multi-turn `runJunctionLoop` — resolves a **deny-by-default** allowlist (empty: no MCP server, no web search, no filesystem search unless you name it) and forwards it to the adapter. **The adapter is responsible for enforcing it**; panelist bundles no provider layer and does not itself prevent a tool from being reached. Wildcard/"grant everything" opt-ins are rejected outright, so a tool-discovery capability can never be smuggled in by granting some other tool. Every response reports the allowlist forwarded (`isolation.tools`) and any attempted-but-denied call the adapter surfaces (`isolation.denied`), so a contaminated run the adapter detects is visible instead of indistinguishable from a clean one (an adapter that neither enforces nor reports cannot be caught by panelist). See ["Tool isolation"](docs/invocation-contract.md#tool-isolation-panelist72).
+
+## Status
+
+panelist is **in maintenance**. What that means:
+
+- **Bug and security fixes only**, on a best-effort basis. Security reports follow [`SECURITY.md`](SECURITY.md).
+- **No new features are planned.**
+- panelist is Apache-2.0 licensed, so forking it is always open to you.
+
+It was developed internally at Kromatic, then open sourced.
 
 ## Why it's different
 
@@ -208,7 +220,3 @@ injected verdict/axis-score manipulation is a separate, ungated surface that nee
 tools at all; a pass here only means one model on one payload didn't take the bait.
 See the file header comment in `eval/tool-injection.mjs` for the full case-by-case
 reasoning.
-
-## Status
-
-Early. Developed internally, then open sourced. Apache-2.0.
