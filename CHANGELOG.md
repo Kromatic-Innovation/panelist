@@ -21,6 +21,7 @@ minor version.
 
 ### Changed
 
+- README: panelist is now marked **in maintenance** (bug and security fixes only, best effort; no new features planned). A Status section sits near the top, replacing the old "Early." status line at the bottom (panelist#297).
 - README: a one-line `npm i panelist` install now sits directly under the hero image, before the first callout, instead of after four paragraphs and two long callouts (panelist#288).
 
 ## [0.5.0] - 2026-11-25
